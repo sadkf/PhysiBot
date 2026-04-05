@@ -126,7 +126,71 @@ class PhysiBot:
         """Register all available tools."""
         from physi_core.agent.tools import PermissionLevel
 
-        # Memory tools
+        # ── Identity tools (L0) ──────────────────────
+
+        async def identity_get(key: str) -> str:
+            val = self._identity.get(key)
+            if val is None:
+                return f"未找到身份信息: {key}"
+            return f"{key}: {val}"
+
+        async def identity_set(key: str, value: str) -> str:
+            self._identity.set(key, value)
+            return f"已记录: {key} = {value}"
+
+        async def identity_list() -> str:
+            keys = self._identity.all_keys()
+            if not keys:
+                return "身份信息为空，还不了解用户"
+            lines = ["当前已知身份信息:"]
+            for k in keys:
+                lines.append(f"  {k}: {self._identity.get(k)}")
+            return "\n".join(lines)
+
+        async def identity_delete(key: str) -> str:
+            if self._identity.delete(key):
+                return f"已删除: {key}"
+            return f"未找到: {key}"
+
+        tc.register(
+            "identity_get", "获取用户的某项身份信息",
+            {"type": "object", "properties": {
+                "key": {
+                    "type": "string",
+                    "description": "信息键名，如: name, age, occupation",
+                },
+            }, "required": ["key"]},
+            identity_get,
+        )
+        tc.register(
+            "identity_set",
+            "记录或更新用户的身份信息（姓名、年龄、偏好等）",
+            {"type": "object", "properties": {
+                "key": {
+                    "type": "string",
+                    "description": "英文小写下划线格式的键名",
+                },
+                "value": {
+                    "type": "string",
+                    "description": "信息内容（中文描述）",
+                },
+            }, "required": ["key", "value"]},
+            identity_set,
+        )
+        tc.register(
+            "identity_list", "列出当前已知的全部用户身份信息",
+            {"type": "object", "properties": {}},
+            identity_list,
+        )
+        tc.register(
+            "identity_delete", "删除某项身份信息",
+            {"type": "object", "properties": {
+                "key": {"type": "string"},
+            }, "required": ["key"]},
+            identity_delete, PermissionLevel.CONFIRM,
+        )
+
+        # ── Memory tools (L3) ────────────────────────
         async def memory_read(topic: str) -> str:
             content = self._long_term.read_topic(topic)
             return content or f"No memory found for topic: {topic}"
