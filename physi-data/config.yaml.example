@@ -1,0 +1,48 @@
+# LLM 提供商配置
+llm:
+  provider: "minimax"               # minimax / anthropic / openai
+  model: "MiniMax-M2.7"             # 模型型号
+  api_key: "your-api-key-here"      # API Key
+  base_url: ""                       # 留空使用默认
+
+# 感知层
+perception:
+  screenpipe:
+    enabled: true
+    api_url: "http://localhost:3030"
+  activitywatch:
+    enabled: true
+    api_url: "http://localhost:5600"
+  clipboard:
+    enabled: true
+    poll_interval: 5                 # 秒
+
+# IoT
+iot:
+  homeassistant:
+    enabled: false
+    url: "http://homeassistant.local:8123"
+    token: "your-ha-long-lived-token"
+
+# QQ
+qq:
+  napcat:
+    ws_url: "ws://localhost:3001"
+    owner_qq: "123456789"            # 绑定用户的 QQ 号（仅处理此用户的私聊）
+
+# Agent 行为
+agent:
+  segment_interval: 1800            # 30 分钟 (秒)
+  user_trigger_cooldown: 600        # 10 分钟节流 (秒)
+  confirm_dangerous: true           # 高危操作是否需确认
+
+# 隐私
+privacy:
+  ignore_apps:                       # 不监控的应用列表
+    - "KeePass"
+    - "1Password"
+  sensitive_keywords:                # 这些关键词出现时跳过
+    - "password"
+    - "银行"
+    - "密码"
+    - "信用卡"

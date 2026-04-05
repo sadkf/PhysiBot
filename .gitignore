@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# User data (包含隐私信息，不上传)
+physi-data/identity/
+physi-data/short_term/
+physi-data/mid_term/
+physi-data/memory/
+physi-data/config.yaml
+
+# 保留示例和模板
+!physi-data/PHYSI.md
+!physi-data/MEMORY.md.example
+!physi-data/config.yaml.example
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vendor (bundled deps, too large for git)
+vendor/
+runtime/
