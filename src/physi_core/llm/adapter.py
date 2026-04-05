@@ -56,6 +56,31 @@ class LLMClient:
         else:
             return await self._chat_openai(messages, system, tools, max_tokens)
 
+    @staticmethod
+    def _convert_tools_anthropic(
+        tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Convert OpenAI-style tool defs to Anthropic-native format.
+
+        OpenAI:    {"type":"function","function":{"name":...,"parameters":...}}
+        Anthropic: {"name":...,"description":...,"input_schema":...}
+        """
+        result = []
+        for tool in tools:
+            if "function" in tool:
+                fn = tool["function"]
+                result.append({
+                    "name": fn["name"],
+                    "description": fn.get("description", ""),
+                    "input_schema": fn.get("parameters", {"type": "object"}),
+                })
+            elif "name" in tool:
+                # Already in Anthropic format
+                result.append(tool)
+            else:
+                result.append(tool)
+        return result
+
     async def _chat_anthropic(
         self,
         messages: list[dict[str, Any]],
@@ -74,7 +99,8 @@ class LLMClient:
         if system:
             kwargs["system"] = system
         if tools:
-            kwargs["tools"] = tools
+            # Convert OpenAI-style tools to Anthropic-native format
+            kwargs["tools"] = self._convert_tools_anthropic(tools)
 
         # Run sync client in thread to avoid blocking
         response = await asyncio.to_thread(self._client.messages.create, **kwargs)
@@ -99,9 +125,18 @@ class LLMClient:
                         )
                     )
 
+        text = "\n".join(text_parts) if text_parts else None
+        thinking = "\n".join(thinking_parts) if thinking_parts else None
+
+        # Fallback: if thinking-only model truncated the text block,
+        # use thinking content as the response text
+        if text is None and thinking and not tool_calls:
+            logger.debug("No text block found, falling back to thinking")
+            text = thinking
+
         return LLMResponse(
-            text="\n".join(text_parts) if text_parts else None,
-            thinking="\n".join(thinking_parts) if thinking_parts else None,
+            text=text,
+            thinking=thinking,
             tool_calls=tool_calls,
             usage=TokenUsage(
                 input_tokens=getattr(response.usage, "input_tokens", 0),
