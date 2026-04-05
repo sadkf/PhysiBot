@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class Scheduler:
 
         async def _loop() -> None:
             while self._running:
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 target = now.replace(hour=hour, minute=minute, second=0)
                 if target <= now:
                     # Already past today's target, wait until tomorrow

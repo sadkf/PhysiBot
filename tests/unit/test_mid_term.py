@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from physi_core.memory.mid_term import MidTermMemory
@@ -11,16 +11,16 @@ from physi_core.memory.mid_term import MidTermMemory
 class TestMidTermSegments:
     def test_write_and_read_segment(self, tmp_path: Path) -> None:
         mem = MidTermMemory(tmp_path / "mid_term")
-        ts = datetime(2026, 4, 5, 14, 30, tzinfo=timezone.utc)
+        ts = datetime(2026, 4, 5, 14, 30, tzinfo=UTC)
         path = mem.write_segment("# 活动摘要\n编码中", ts=ts)
         assert path.name == "2026-04-05_1430.md"
         assert mem.read_segment("2026-04-05_1430.md") == "# 活动摘要\n编码中"
 
     def test_list_segments(self, tmp_path: Path) -> None:
         mem = MidTermMemory(tmp_path / "mid_term")
-        ts1 = datetime(2026, 4, 5, 9, 0, tzinfo=timezone.utc)
-        ts2 = datetime(2026, 4, 5, 9, 30, tzinfo=timezone.utc)
-        ts3 = datetime(2026, 4, 5, 10, 0, tzinfo=timezone.utc)
+        ts1 = datetime(2026, 4, 5, 9, 0, tzinfo=UTC)
+        ts2 = datetime(2026, 4, 5, 9, 30, tzinfo=UTC)
+        ts3 = datetime(2026, 4, 5, 10, 0, tzinfo=UTC)
         mem.write_segment("seg1", ts=ts1)
         mem.write_segment("seg2", ts=ts2)
         mem.write_segment("seg3", ts=ts3)
@@ -31,17 +31,17 @@ class TestMidTermSegments:
 
     def test_list_segments_by_date(self, tmp_path: Path) -> None:
         mem = MidTermMemory(tmp_path / "mid_term")
-        mem.write_segment("a", ts=datetime(2026, 4, 5, 9, 0, tzinfo=timezone.utc))
-        mem.write_segment("b", ts=datetime(2026, 4, 6, 9, 0, tzinfo=timezone.utc))
+        mem.write_segment("a", ts=datetime(2026, 4, 5, 9, 0, tzinfo=UTC))
+        mem.write_segment("b", ts=datetime(2026, 4, 6, 9, 0, tzinfo=UTC))
 
         day5 = mem.list_segments("2026-04-05")
         assert len(day5) == 1
 
     def test_get_recent_segments(self, tmp_path: Path) -> None:
         mem = MidTermMemory(tmp_path / "mid_term")
-        mem.write_segment("old", ts=datetime(2026, 4, 5, 9, 0, tzinfo=timezone.utc))
-        mem.write_segment("mid", ts=datetime(2026, 4, 5, 9, 30, tzinfo=timezone.utc))
-        mem.write_segment("new", ts=datetime(2026, 4, 5, 10, 0, tzinfo=timezone.utc))
+        mem.write_segment("old", ts=datetime(2026, 4, 5, 9, 0, tzinfo=UTC))
+        mem.write_segment("mid", ts=datetime(2026, 4, 5, 9, 30, tzinfo=UTC))
+        mem.write_segment("new", ts=datetime(2026, 4, 5, 10, 0, tzinfo=UTC))
 
         recent = mem.get_recent_segments(2)
         assert len(recent) == 2
@@ -49,8 +49,8 @@ class TestMidTermSegments:
 
     def test_get_segments_for_day(self, tmp_path: Path) -> None:
         mem = MidTermMemory(tmp_path / "mid_term")
-        mem.write_segment("a", ts=datetime(2026, 4, 5, 9, 0, tzinfo=timezone.utc))
-        mem.write_segment("b", ts=datetime(2026, 4, 5, 14, 0, tzinfo=timezone.utc))
+        mem.write_segment("a", ts=datetime(2026, 4, 5, 9, 0, tzinfo=UTC))
+        mem.write_segment("b", ts=datetime(2026, 4, 5, 14, 0, tzinfo=UTC))
 
         segs = mem.get_segments_for_day("2026-04-05")
         assert segs == ["a", "b"]
@@ -61,8 +61,8 @@ class TestMidTermSegments:
 
     def test_cleanup_segments(self, tmp_path: Path) -> None:
         mem = MidTermMemory(tmp_path / "mid_term")
-        mem.write_segment("a", ts=datetime(2026, 4, 5, 9, 0, tzinfo=timezone.utc))
-        mem.write_segment("b", ts=datetime(2026, 4, 5, 9, 30, tzinfo=timezone.utc))
+        mem.write_segment("a", ts=datetime(2026, 4, 5, 9, 0, tzinfo=UTC))
+        mem.write_segment("b", ts=datetime(2026, 4, 5, 9, 30, tzinfo=UTC))
         assert mem.segment_count == 2
 
         removed = mem.cleanup_segments(["2026-04-05_0900.md"])
@@ -72,7 +72,7 @@ class TestMidTermSegments:
     def test_segment_count(self, tmp_path: Path) -> None:
         mem = MidTermMemory(tmp_path / "mid_term")
         assert mem.segment_count == 0
-        mem.write_segment("x", ts=datetime(2026, 4, 5, 9, 0, tzinfo=timezone.utc))
+        mem.write_segment("x", ts=datetime(2026, 4, 5, 9, 0, tzinfo=UTC))
         assert mem.segment_count == 1
 
 

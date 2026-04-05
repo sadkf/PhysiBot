@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ class MidTermMemory:
 
     def write_segment(self, content: str, ts: datetime | None = None) -> Path:
         """Write a 30-min segment file. Returns the path written."""
-        ts = ts or datetime.now(timezone.utc)
+        ts = ts or datetime.now(UTC)
         filename = ts.strftime("%Y-%m-%d_%H%M") + ".md"
         path = self._segments_dir / filename
         path.write_text(content, encoding="utf-8")
@@ -63,7 +62,7 @@ class MidTermMemory:
 
     def write_daily(self, content: str, date: str | None = None) -> Path:
         """Write a daily summary. date format: YYYY-MM-DD."""
-        date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date = date or datetime.now(UTC).strftime("%Y-%m-%d")
         path = self._daily_dir / f"{date}.md"
         path.write_text(content, encoding="utf-8")
         logger.info("Wrote daily summary: %s", date)
@@ -76,7 +75,7 @@ class MidTermMemory:
 
     def get_today_summary(self) -> str:
         """Get today's daily summary, empty if not yet generated."""
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         return self.read_daily(today) or ""
 
     def list_dailies(self) -> list[Path]:
@@ -92,7 +91,7 @@ class MidTermMemory:
 
     def write_weekly(self, content: str, week: str | None = None) -> Path:
         """Write a weekly summary. week format: YYYY-WNN."""
-        week = week or datetime.now(timezone.utc).strftime("%G-W%V")
+        week = week or datetime.now(UTC).strftime("%G-W%V")
         path = self._weekly_dir / f"{week}.md"
         path.write_text(content, encoding="utf-8")
         logger.info("Wrote weekly summary: %s", week)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -35,13 +35,15 @@ class PhysiBot:
         self._throttle: Any = None
         self._screenpipe: Any = None
         self._aw: Any = None
+        self._clipboard: Any = None
+        self._privacy: Any = None
         self._qq: Any = None
 
     def _init_components(self) -> None:
         """Initialize all components."""
         from physi_core.agent.loop import AgentLoop
         from physi_core.agent.prompts import build_system_prompt, load_physi_md
-        from physi_core.agent.tools import PermissionLevel, ToolController
+        from physi_core.agent.tools import ToolController
         from physi_core.events.scheduler import Scheduler, Throttle
         from physi_core.integrations.activitywatch import ActivityWatchClient
         from physi_core.integrations.screenpipe import ScreenpipeClient
@@ -70,11 +72,25 @@ class PhysiBot:
             self._llm, self._mid_term, self._long_term, self._memory_index,
         )
 
+        # Privacy filter
+        from physi_core.integrations.privacy import PrivacyFilter
+        self._privacy = PrivacyFilter(
+            keywords=self._settings.privacy.sensitive_keywords,
+            ignore_apps=self._settings.privacy.ignore_apps,
+        )
+
         # Perception
         sp = self._settings.perception.screenpipe
         self._screenpipe = ScreenpipeClient(sp.api_url) if sp.enabled else None
         aw = self._settings.perception.activitywatch
         self._aw = ActivityWatchClient(aw.api_url) if aw.enabled else None
+
+        # Clipboard
+        from physi_core.integrations.clipboard import ClipboardMonitor
+        cb = self._settings.perception.clipboard
+        self._clipboard = ClipboardMonitor(
+            poll_interval=cb.poll_interval
+        ) if cb.enabled else None
 
         # Tools
         self._tools = ToolController()
@@ -190,11 +206,18 @@ class PhysiBot:
                 from physi_core.integrations.screenpipe import ScreenpipeClient
                 frames = await self._screenpipe.search_ocr(minutes=30)
                 unique = ScreenpipeClient.deduplicate(frames)
+                # Privacy: filter out sensitive apps and content
+                if self._privacy:
+                    unique = [
+                        f for f in unique
+                        if not self._privacy.should_skip_app(f.app_name)
+                        and not self._privacy.contains_sensitive(f.text)
+                    ]
                 if unique:
-                    parts.append(
-                        "## 屏幕活动 (OCR)\n"
-                        + ScreenpipeClient.format_for_llm(unique)
-                    )
+                    text = ScreenpipeClient.format_for_llm(unique)
+                    if self._privacy:
+                        text = self._privacy.redact(text)
+                    parts.append("## 屏幕活动 (OCR)\n" + text)
             except Exception:
                 logger.warning("Screenpipe data collection failed")
 
@@ -212,6 +235,13 @@ class PhysiBot:
             except Exception:
                 logger.warning("ActivityWatch data collection failed")
 
+        if self._clipboard:
+            clip_text = self._clipboard.format_for_llm(3)
+            if clip_text:
+                if self._privacy:
+                    clip_text = self._privacy.redact(clip_text)
+                parts.append(clip_text)
+
         return "\n\n".join(parts) if parts else "无感知数据"
 
     # ── Timer Callbacks ────────────────────────────
@@ -221,7 +251,7 @@ class PhysiBot:
         logger.info("⏰ Segment timer triggered")
 
         raw_data = await self._collect_perception_data()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         current_time = now.strftime("%H:%M")
 
         result = await self._consolidator.summarize_segment(
@@ -240,7 +270,7 @@ class PhysiBot:
 
     async def _on_daily_merge(self) -> None:
         """Daily: merge today's segments into daily summary."""
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         logger.info("📅 Daily merge for %s", today)
 
         result = await self._consolidator.merge_daily(today)

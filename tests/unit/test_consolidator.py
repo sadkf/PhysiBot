@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -59,11 +60,11 @@ class TestDailyMerge:
     @pytest.mark.asyncio
     async def test_merge_segments_into_daily(self, mem_stack) -> None:
         mid, lt, idx = mem_stack
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # Create segments
-        mid.write_segment("segA", datetime(2026, 4, 5, 9, 0, tzinfo=timezone.utc))
-        mid.write_segment("segB", datetime(2026, 4, 5, 9, 30, tzinfo=timezone.utc))
+        mid.write_segment("segA", datetime(2026, 4, 5, 9, 0, tzinfo=UTC))
+        mid.write_segment("segB", datetime(2026, 4, 5, 9, 30, tzinfo=UTC))
 
         llm = _mock_llm(
             "# 2026-04-05 日报\n今天写了代码\n"
@@ -123,7 +124,11 @@ class TestParseJson:
         assert len(result) == 1
 
     def test_parse_json_in_markdown(self) -> None:
-        text = "Here's the result:\n```json\n{\"updates\": [{\"topic\": \"a\", \"action\": \"append\", \"content\": \"b\"}]}\n```"
+        text = (
+            "Here's the result:\n```json\n"
+            '{"updates": [{"topic": "a", "action": "append", "content": "b"}]}'
+            "\n```"
+        )
         result = Consolidator._parse_json_updates(text)
         assert len(result) == 1
 
