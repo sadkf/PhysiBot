@@ -143,22 +143,11 @@ function Download-AndUnzip([string]$Url, [string]$DestDir, [string]$Label) {
 }
 
 function Get-GithubAssetUrl([string]$Repo, [string[]]$Patterns) {
-    try {
-        $headers = @{ "User-Agent" = "PhysiBot-Launcher"; "Accept" = "application/vnd.github+json" }
-        $rels = Invoke-RestMethod -Uri ("https://api.github.com/repos/" + $Repo + "/releases?per_page=30") -Headers $headers
-        foreach ($rel in $rels) {
-            foreach ($asset in ($rel.assets | ForEach-Object { $_ })) {
-                foreach ($pattern in $Patterns) {
-                    if ($asset.name -match $pattern) {
-                        Write-Host ("  Found: {0} ({1} @ {2})" -f $asset.name, $rel.tag_name, $Repo) -ForegroundColor DarkGray
-                        return $asset.browser_download_url
-                    }
-                }
-            }
-        }
-        Write-Warn ("no matching asset in " + $Repo)
-    } catch {
-        Write-Warn ("github api failed for {0}: {1}" -f $Repo, $_.Exception.Message)
+    # 彻底弃用 github api，直接硬编码中国区测试最优稳定版本，由上层 ghfast.top 代理加速
+    if ($Repo -eq "BtbN/FFmpeg-Builds") {
+        return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+    } elseif ($Repo -eq "ActivityWatch/activitywatch") {
+        return "https://github.com/ActivityWatch/activitywatch/releases/download/v0.12.2/activitywatch-v0.12.2-windows-x86_64.zip"
     }
     return $null
 }
@@ -190,16 +179,7 @@ function Ensure-FFmpeg([string]$TargetDir) {
 }
 
 function Get-ScreenpipeAssetUrl() {
-    $patterns = @(
-        "x86_64.*windows.*\.zip$",
-        "screenpipe.*windows.*\.zip$",
-        "windows.*\.zip$"
-    )
-    $url = Get-GithubAssetUrl -Repo "screenpipe/screenpipe" -Patterns $patterns
-    if ($url) { return $url }
-    $url = Get-GithubAssetUrl -Repo "mediar-ai/screenpipe" -Patterns $patterns
-    if ($url) { return $url }
-    return $null
+    return "https://github.com/mediar-ai/screenpipe/releases/download/v0.3.62/screenpipe-0.3.62-x86_64-pc-windows-msvc.zip"
 }
 
 function Start-ScreenpipeNpmFallback([string]$RootDir, [string]$DataDir, [bool]$OfflineMode) {
@@ -218,7 +198,33 @@ function Start-ScreenpipeNpmFallback([string]$RootDir, [string]$DataDir, [bool]$
     Start-Process -FilePath "cmd.exe" -ArgumentList "/c $fallbackCmd" -WorkingDirectory $RootDir -WindowStyle Hidden
 }
 
-Write-Step "[1/4] Pre-flight cleanup"
+# ===========================================================================
+# 嵌入式 Python 检测（离线包模式）
+# 若 vendor/python-embed/python.exe 存在，则完全使用它，不依赖系统 Python/uv
+# ===========================================================================
+$EMBED_PYTHON = Join-Path $VENDOR "python-embed\python.exe"
+$USE_EMBED    = Test-Path $EMBED_PYTHON
+
+if ($USE_EMBED) {
+    Write-Host "`n[离线包模式] 使用嵌入式 Python: $EMBED_PYTHON" -ForegroundColor Cyan
+    # 确保嵌入式 Python 的 Scripts 目录在 PATH 中
+    $embedScripts = Join-Path $VENDOR "python-embed\Scripts"
+    $env:PATH = "$VENDOR\python-embed;$embedScripts;" + $env:PATH
+    # 不需要 uv sync，包已预装
+    $OfflineBundle = $true
+} else {
+    Write-Host "`n[标准模式] 使用系统 Python / uv" -ForegroundColor DarkGray
+}
+
+# 检查 ActivityWatch zip（离线包内可能携带 zip 而非已解压目录）
+$AW_ZIP_BUNDLED = Join-Path $VENDOR "activitywatch.zip"
+if ((Test-Path $AW_ZIP_BUNDLED) -and (-not (Test-Path (Join-Path $VENDOR "activitywatch\aw-server.exe")))) {
+    Write-Host "  解压捆绑的 activitywatch.zip ..." -ForegroundColor Yellow
+    Expand-Archive -Path $AW_ZIP_BUNDLED -DestinationPath (Join-Path $VENDOR "activitywatch") -Force
+    Write-OK "ActivityWatch 解压完成"
+}
+
+Write-Step "[1/5] Pre-flight cleanup"
 if ($SkipCleanup) {
     Write-Warn "cleanup disabled by -SkipCleanup"
 } else {
@@ -250,7 +256,40 @@ if ($SkipCleanup) {
     Write-OK "cleanup done"
 }
 
-Write-Step "[2/4] ActivityWatch"
+# ===========================================================================
+# NapCat（QQ 消息中间件）
+# 查找顺序: vendor/napcat → physi-data/napcat
+# ===========================================================================
+Write-Step "[2/5] NapCat"
+$NAP_DIRS = @(
+    (Join-Path $VENDOR "napcat"),
+    (Join-Path $ROOT "physi-data\napcat")
+)
+$NAP_BAT = $null
+foreach ($d in $NAP_DIRS) {
+    $candidate = Join-Path $d "napcat.bat"
+    if (Test-Path $candidate) { $NAP_BAT = $candidate; break }
+}
+
+if (Is-PortOpen 3001) {
+    Write-OK "NapCat WebSocket already on :3001"
+} elseif ($NAP_BAT) {
+    Write-Host "  启动 NapCat: $NAP_BAT" -ForegroundColor Yellow
+    $napDir = Split-Path $NAP_BAT -Parent
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$NAP_BAT`"" `
+        -WorkingDirectory $napDir -WindowStyle Hidden
+    if (Wait-Port -Port 3001 -TimeoutSec 30) {
+        Write-OK "NapCat started on :3001"
+    } else {
+        Write-Warn "NapCat 已启动，但 :3001 尚未就绪（可能需要扫码登录 QQ）"
+        Write-Host "  请在弹出的 QQ 窗口完成登录后，PhysiBot 将自动连接。" -ForegroundColor Yellow
+    }
+} else {
+    Write-Warn "NapCat 未找到（vendor\napcat\napcat.bat 不存在）"
+    Write-Host "  若要启用 QQ 消息功能，请将 NapCat 放到 vendor\napcat\ 目录。" -ForegroundColor DarkGray
+}
+
+Write-Step "[3/5] ActivityWatch"
 $AW_DIR = Join-Path $VENDOR "activitywatch"
 $AW_SERVER = Find-Exe -Root $AW_DIR -ExeName "aw-server.exe"
 $AW_WATCHER = Find-Exe -Root $AW_DIR -ExeName "aw-watcher-window.exe"
@@ -278,7 +317,7 @@ if (Is-Running "aw-server") {
     Write-Warn "aw-server.exe not found, ActivityWatch disabled"
 }
 
-Write-Step "[3/4] Screenpipe"
+Write-Step "[4/5] Screenpipe"
 $SP_DIR = Join-Path $VENDOR "screenpipe"
 $SP_EXE = Find-Exe -Root $SP_DIR -ExeName "screenpipe.exe"
 $FFMPEG_BIN = Ensure-FFmpeg -TargetDir $SP_DIR
@@ -326,7 +365,7 @@ if (Is-Running "screenpipe") {
     } else { Write-Warn "screenpipe fallback failed, OCR disabled" }
 }
 
-Write-Step "[4/4] PhysiBot"
+Write-Step "[5/5] PhysiBot"
 if ($SkipBot) {
     Write-Warn "bot launch disabled by -SkipBot"
     exit 0
@@ -334,7 +373,15 @@ if ($SkipBot) {
 
 Set-Location $ROOT
 $env:PYTHONPATH = "src"
-$env:UV_INDEX_URL = $UV_MIRROR
-$env:PIP_INDEX_URL = $UV_MIRROR
 $env:npm_config_registry = $NPM_MIRROR
-uv run python -m physi_core
+
+if ($USE_EMBED) {
+    # 离线包模式：直接用嵌入式 Python 运行
+    Write-Host "  使用嵌入式 Python 启动 PhysiBot..." -ForegroundColor Cyan
+    & $EMBED_PYTHON -m physi_core
+} else {
+    # 标准模式：通过 uv 管理环境
+    $env:UV_INDEX_URL = $UV_MIRROR
+    $env:PIP_INDEX_URL = $UV_MIRROR
+    uv run python -m physi_core
+}

@@ -1,6 +1,5 @@
 """NapCatQQ Manager — Deeply robust lifecycle with refined directory detection."""
 
-import asyncio
 import json
 import logging
 import platform
@@ -19,7 +18,9 @@ logger = logging.getLogger(__name__)
 class NapCatManager:
     """Manages downloading, configuring, and running NapCatQQ with refined rooting."""
 
-    def __init__(self, data_dir: Path, owner_qq: str, reverse_ws_url: str = "ws://127.0.0.1:3001/") -> None:
+    def __init__(
+        self, data_dir: Path, owner_qq: str, reverse_ws_url: str = "ws://127.0.0.1:3001/"
+    ) -> None:
         self._data_dir = data_dir
         self._napcat_base = data_dir / "napcat"
         self._owner_qq = owner_qq
@@ -57,20 +58,20 @@ class NapCatManager:
         """Find the true NapCat root by locating index.js (strictly outside node_modules)."""
         # We need an index.js that also has a node.exe nearby - that's the real app root.
         all_indices = list(self._napcat_base.rglob("index.js"))
-        
+
         # Filter out node_modules
         valid_indices = [idx for idx in all_indices if "node_modules" not in str(idx)]
-        
+
         if not valid_indices:
             # Fallback to the base if nothing found
             return self._napcat_base
-            
+
         # Select the one that has node.exe or napcat.bat in the same dir
         for idx in valid_indices:
             root = idx.parent
             if (root / "node.exe").exists() or (root / "napcat.bat").exists():
                 return root
-                
+
         # If no binary found nearby, just pick the shallowest one (most likely the top-level)
         return min(valid_indices, key=lambda x: len(x.parts)).parent
 
@@ -82,26 +83,13 @@ class NapCatManager:
         logger.info("📦 NapCatQQ not found. Downloading...")
         self._napcat_base.mkdir(parents=True, exist_ok=True)
 
-        api_url = "https://api.github.com/repos/NapNeko/NapCatQQ/releases/latest"
         async with httpx.AsyncClient(follow_redirects=True, verify=False) as client:
-            resp = await client.get(api_url, timeout=10.0)
-            resp.raise_for_status()
-            data = resp.json()
-
-            asset_url = None
-            for asset in data.get("assets", []):
-                name = asset["name"].lower()
-                if "win" in name and name.endswith(".zip"):
-                    asset_url = asset["browser_download_url"]
-                    if "onekey" in name or "node" in name:
-                        break
-
-            if not asset_url:
-                raise RuntimeError("适合的 Windows 发行版未找到。")
-
-            mirror_url = f"https://ghfast.top/{asset_url}"
+            # 彻底弃用 github api 查询，避免在国内被墙导致超时
+            # 直接写死版本号配合 ghfast.top 稳定下载
+            mirror_url = "https://ghfast.top/https://github.com/NapNeko/NapCatQQ/releases/download/v4.17.55/NapCat.Shell.Windows.OneKey.zip"
             zip_path = self._data_dir / "napcat_download.zip"
 
+            logger.info("Downloading NapCatQQ from %s", mirror_url)
             with open(zip_path, "wb") as f:
                 async with client.stream("GET", mirror_url) as stream:
                     async for chunk in stream.aiter_bytes():
@@ -134,7 +122,7 @@ class NapCatManager:
             "version": 1,
             "qq": self._owner_qq,
             "p": "onebot11",
-            "webui": {"enable": True, "port": 6100, "token": "physibot"}
+            "webui": {"enable": True, "port": 6100, "token": "physibot"},
         }
         outer_config_dir = root / "config"
         outer_config_dir.mkdir(parents=True, exist_ok=True)
@@ -155,7 +143,7 @@ class NapCatManager:
                         "enableCors": True,
                         "enableWebsocket": False,
                         "messagePostFormat": "array",
-                        "token": ""
+                        "token": "",
                     }
                 ],
                 "websocketServers": [],
@@ -165,32 +153,42 @@ class NapCatManager:
                         "enable": True,
                         "url": reverse_ws_url,
                         "reconnectInterval": 3000,
-                        "token": ""
+                        "token": "",
                     }
                 ],
-                "httpClients": []
+                "httpClients": [],
             },
             "reportSelfMessage": True,
-            "log": {"level": "info"}
+            "log": {"level": "info"},
         }
 
         for f in ["onebot11.json", f"onebot11_{self._owner_qq}.json"]:
             with open(napcat_config_dir / f, "w", encoding="utf-8") as file:
                 json.dump(ob_config, file, indent=4)
 
-        logger.info("NapCat configured: ws_url=%s, config_dir=%s", reverse_ws_url, napcat_config_dir)
+        logger.info(
+            "NapCat configured: ws_url=%s, config_dir=%s", reverse_ws_url, napcat_config_dir
+        )
 
     async def _launch_daemon(self, root: Path) -> bool:
         """Spawn NapCat from the detected true root."""
+        import shutil
+
         exe = root / "node.exe"
         if not exe.exists():
             exe = root.parent / "node.exe"  # Fallback if node.exe is one level up
-            
-        if not exe.exists():
-            logger.error("No node.exe found at %s", root)
-            return False
 
-        cmd = [str(exe), "./index.js", "-q", self._owner_qq]
+        exe_str = str(exe)
+        if not exe.exists():
+            system_node = shutil.which("node")
+            if system_node:
+                exe_str = system_node
+                logger.info("Using system node: %s", system_node)
+            else:
+                logger.error("No node.exe found at %s or in PATH", root)
+                return False
+
+        cmd = [exe_str, "./index.js", "-q", self._owner_qq]
         logger.info("Booting NapCat from root: %s", root)
 
         self._process = subprocess.Popen(
@@ -209,7 +207,7 @@ class NapCatManager:
             if not self._process or not self._process.stdout:
                 return
             verbose = False
-            for line in iter(self._process.stdout.readline, ''):
+            for line in iter(self._process.stdout.readline, ""):
                 if not self._running:
                     break
                 stripped = line.strip()
