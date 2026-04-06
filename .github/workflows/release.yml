@@ -3,8 +3,8 @@ name: Build & Release
 on:
   push:
     tags:
-      - 'v*'          # 推送 v0.1.0、v1.0.0 等 tag 时触发
-  workflow_dispatch:   # 也支持手动触发（Actions 页面点 Run workflow）
+      - 'v*'
+  workflow_dispatch:
     inputs:
       version:
         description: '版本号 (如 0.1.0)'
@@ -17,11 +17,9 @@ jobs:
     timeout-minutes: 60
 
     steps:
-    # ─── 1. 拉取代码 ─────────────────────────────────────────────
     - name: Checkout
       uses: actions/checkout@v4
 
-    # ─── 2. 确定版本号 ────────────────────────────────────────────
     - name: Set version
       id: ver
       shell: pwsh
@@ -31,28 +29,19 @@ jobs:
         } else {
             $v = "${{ github.event.inputs.version }}"
         }
-        echo "VERSION=$v" >> $env:GITHUB_OUTPUT
-        echo "TAG=v$v"    >> $env:GITHUB_OUTPUT
+        "VERSION=$v" >> $env:GITHUB_OUTPUT
+        "TAG=v$v"    >> $env:GITHUB_OUTPUT
         Write-Host "Building PhysiBot $v"
 
-    # ─── 3. 设置 Python ──────────────────────────────────────────
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-
-    # ─── 4. 准备构建目录 ─────────────────────────────────────────
-    - name: Init dist directory
+    - name: Init dist dir
       shell: pwsh
       run: |
-        $v    = "${{ steps.ver.outputs.VERSION }}"
-        $name = "PhysiBot-$v"
-        New-Item -ItemType Directory -Path "dist\$name" -Force | Out-Null
+        $name = "PhysiBot-${{ steps.ver.outputs.VERSION }}"
         New-Item -ItemType Directory -Path "dist\$name\vendor" -Force | Out-Null
-        echo "DIST_NAME=$name"      >> $env:GITHUB_ENV
-        echo "DIST_DIR=dist\$name"  >> $env:GITHUB_ENV
+        "DIST_NAME=$name"     >> $env:GITHUB_ENV
+        "DIST_DIR=dist\$name" >> $env:GITHUB_ENV
 
-    # ─── 5. 复制源码 & 启动脚本 ──────────────────────────────────
+    # ── 源码 & 启动脚本 ──────────────────────────────────────
     - name: Copy source files
       shell: pwsh
       run: |
@@ -60,80 +49,77 @@ jobs:
         foreach ($item in @("src","pyproject.toml","uv.lock","run.ps1",
                              "一键启动.bat","start.bat","PhysiBot.cmd",
                              "START_HERE.txt","setup.bat")) {
-            if (Test-Path $item) {
-                Copy-Item -Path $item -Destination $d -Recurse -Force
-                Write-Host "  copied: $item"
-            }
+            if (Test-Path $item) { Copy-Item $item $d -Recurse -Force }
         }
-        # scripts/
-        New-Item -ItemType Directory -Path "$d\scripts" -Force | Out-Null
-        Copy-Item "scripts\bootstrap_and_run.ps1" "$d\scripts\" -Force
-
-    # ─── 6. physi-data 模板（无个人数据）────────────────────────
-    - name: Create physi-data template
-      shell: pwsh
-      run: |
-        $pd = "$env:DIST_DIR\physi-data"
-        New-Item -ItemType Directory -Path $pd -Force | Out-Null
-        if (Test-Path "physi-data\config.yaml.example") {
-            Copy-Item "physi-data\config.yaml.example" "$pd\config.yaml.example"
+        New-Item -ItemType Directory "$d\scripts" -Force | Out-Null
+        foreach ($f in @("bootstrap_and_run.ps1","setup.ps1")) {
+            if (Test-Path "scripts\$f") { Copy-Item "scripts\$f" "$d\scripts\" -Force }
         }
-        if (Test-Path "physi-data\PHYSI.md") {
-            Copy-Item "physi-data\PHYSI.md" $pd
+        # physi-data 模板（无个人数据）
+        New-Item -ItemType Directory "$d\physi-data" -Force | Out-Null
+        foreach ($f in @("config.yaml.example","PHYSI.md")) {
+            if (Test-Path "physi-data\$f") { Copy-Item "physi-data\$f" "$d\physi-data\" -Force }
         }
 
-    # ─── 7. Python 嵌入包 ────────────────────────────────────────
-    - name: Download Python embeddable
+    # ── Python 嵌入包 ────────────────────────────────────────
+    - name: Download & prepare Python embeddable
       shell: pwsh
       run: |
         $ProgressPreference = "SilentlyContinue"
-        $pyDir = "$env:DIST_DIR\vendor\python-embed"
-        New-Item -ItemType Directory -Path $pyDir -Force | Out-Null
-        $zipPath = "$env:TEMP\python-embed.zip"
-        # 从华为云镜像下载（国内可直连，速度快）
-        Invoke-WebRequest `
-          -Uri "https://mirrors.huaweicloud.com/python/3.12.8/python-3.12.8-embed-amd64.zip" `
-          -OutFile $zipPath -UseBasicParsing
-        Expand-Archive -Path $zipPath -DestinationPath $pyDir -Force
-        # 启用 site-packages
+        $pyDir  = "$env:DIST_DIR\vendor\python-embed"
+        $zipTmp = "$env:TEMP\python-embed.zip"
+        New-Item -ItemType Directory $pyDir -Force | Out-Null
+
+        Invoke-WebRequest -Uri "https://mirrors.huaweicloud.com/python/3.12.8/python-3.12.8-embed-amd64.zip" `
+            -OutFile $zipTmp -UseBasicParsing
+        Expand-Archive $zipTmp $pyDir -Force
+
+        # 启用 site-packages（解注释 import site）
         Get-ChildItem $pyDir -Filter "python*._pth" | ForEach-Object {
-            $c = Get-Content $_.FullName -Raw
-            Set-Content $_.FullName ($c -replace '#import site','import site') -Encoding UTF8
+            (Get-Content $_.FullName -Raw) -replace '#import site','import site' |
+                Set-Content $_.FullName -Encoding UTF8
         }
-        Write-Host "Python embed ready"
 
-    - name: Install pip into embedded Python
-      shell: pwsh
-      run: |
-        $ProgressPreference = "SilentlyContinue"
-        $pyExe = "$env:DIST_DIR\vendor\python-embed\python.exe"
+        # 安装 pip
         $getpip = "$env:TEMP\get-pip.py"
         Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getpip -UseBasicParsing
-        & $pyExe $getpip --no-warn-script-location -q `
+        & "$pyDir\python.exe" $getpip --no-warn-script-location -q `
             -i https://pypi.tuna.tsinghua.edu.cn/simple
+        if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 
-    - name: Install project deps into embedded Python
+        Write-Host "Python embed + pip ready"
+
+    - name: Install project into embedded Python
       shell: pwsh
       run: |
+        $ProgressPreference = "SilentlyContinue"
         $pyExe = "$env:DIST_DIR\vendor\python-embed\python.exe"
-        & $pyExe -m pip install -e . --no-warn-script-location -q `
-            -i https://pypi.tuna.tsinghua.edu.cn/simple
-        Write-Host "Dependencies installed"
+        $mirror = "https://pypi.tuna.tsinghua.edu.cn/simple"
 
-    # ─── 8. ActivityWatch ────────────────────────────────────────
+        # 先装构建后端，再做普通（非 editable）安装
+        & $pyExe -m pip install hatchling --no-warn-script-location -q -i $mirror
+        if ($LASTEXITCODE -ne 0) { throw "hatchling install failed" }
+
+        & $pyExe -m pip install . --no-warn-script-location -q -i $mirror
+        if ($LASTEXITCODE -ne 0) { throw "project install failed" }
+
+        Write-Host "All dependencies installed"
+
+    # ── ActivityWatch ────────────────────────────────────────
     - name: Bundle ActivityWatch
       shell: pwsh
       run: |
         $ProgressPreference = "SilentlyContinue"
         $awDir = "$env:DIST_DIR\vendor\activitywatch"
-        New-Item -ItemType Directory -Path $awDir -Force | Out-Null
-        $tmp = "$env:TEMP\aw.zip"
-        # GitHub mirror (ghfast.top)
+        $tmp   = "$env:TEMP\aw.zip"
+        New-Item -ItemType Directory $awDir -Force | Out-Null
+
         Invoke-WebRequest `
-          -Uri "https://ghfast.top/https://github.com/ActivityWatch/activitywatch/releases/download/v0.12.2/activitywatch-v0.12.2-windows-x86_64.zip" `
-          -OutFile $tmp -UseBasicParsing
+            -Uri "https://ghfast.top/https://github.com/ActivityWatch/activitywatch/releases/download/v0.12.2/activitywatch-v0.12.2-windows-x86_64.zip" `
+            -OutFile $tmp -UseBasicParsing
         Expand-Archive $tmp $awDir -Force
-        # 展平单层嵌套文件夹
+
+        # 展平单层嵌套
         $subs = Get-ChildItem $awDir -Directory
         if ($subs.Count -eq 1) {
             Get-ChildItem $subs[0].FullName -Force | Move-Item -Destination $awDir -Force
@@ -142,46 +128,19 @@ jobs:
         Remove-Item $tmp -Force
         Write-Host "ActivityWatch bundled"
 
-    # ─── 9. NapCat Shell (官方最新版) ────────────────────────────
-    - name: Bundle NapCat
+    # ── 打包 ZIP ─────────────────────────────────────────────
+    - name: Create ZIP
       shell: pwsh
       run: |
-        $ProgressPreference = "SilentlyContinue"
-        $napDir = "$env:DIST_DIR\vendor\napcat"
-        New-Item -ItemType Directory -Path $napDir -Force | Out-Null
-        $tmp = "$env:TEMP\napcat.zip"
-
-        # 查询最新版本
-        $rel = Invoke-RestMethod "https://api.github.com/repos/NapNeko/NapCatQQ/releases/latest"
-        $asset = $rel.assets | Where-Object { $_.name -like "NapCat.Shell.Windows.Node*" } | Select-Object -First 1
-        if (-not $asset) {
-            Write-Warning "NapCat asset not found, skipping"
-            return
-        }
-        Write-Host "NapCat version: $($rel.tag_name) | Asset: $($asset.name)"
-
-        Invoke-WebRequest `
-          -Uri "https://ghfast.top/$($asset.browser_download_url)" `
-          -OutFile $tmp -UseBasicParsing
-        Expand-Archive $tmp $napDir -Force
-        Remove-Item $tmp -Force
-        Write-Host "NapCat bundled"
-
-    # ─── 10. 打包 ZIP ─────────────────────────────────────────────
-    - name: Create ZIP archive
-      shell: pwsh
-      run: |
-        $v    = "${{ steps.ver.outputs.VERSION }}"
-        $name = $env:DIST_NAME
-        $zip  = "dist\$name.zip"
+        $zip = "dist\$env:DIST_NAME.zip"
         Compress-Archive -Path "$env:DIST_DIR\*" -DestinationPath $zip -CompressionLevel Optimal
         $mb = [math]::Round((Get-Item $zip).Length / 1MB, 0)
         Write-Host "Archive: $zip ($mb MB)"
-        echo "ZIP_PATH=$zip"  >> $env:GITHUB_ENV
-        echo "ZIP_NAME=$name.zip" >> $env:GITHUB_ENV
+        "ZIP_PATH=$zip"            >> $env:GITHUB_ENV
+        "ZIP_NAME=$env:DIST_NAME.zip" >> $env:GITHUB_ENV
 
-    # ─── 11. 上传 Release ─────────────────────────────────────────
-    - name: Create GitHub Release
+    # ── 上传 Release ─────────────────────────────────────────
+    - name: Publish Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.ver.outputs.TAG }}
@@ -189,33 +148,26 @@ jobs:
         body: |
           ## PhysiBot ${{ steps.ver.outputs.VERSION }}
 
-          ### 📦 下载方式（国内无需梯子）
+          ### 下载（国内无需梯子）
 
-          **推荐：通过 ghfast.top 镜像下载（国内高速）**
           ```
           https://ghfast.top/https://github.com/${{ github.repository }}/releases/download/${{ steps.ver.outputs.TAG }}/${{ env.ZIP_NAME }}
           ```
 
-          **备用：ghproxy.net**
-          ```
-          https://ghproxy.net/https://github.com/${{ github.repository }}/releases/download/${{ steps.ver.outputs.TAG }}/${{ env.ZIP_NAME }}
-          ```
+          备用：将 `ghfast.top` 换成 `ghproxy.net`
 
-          ### 🚀 使用步骤
+          ### 使用步骤
+          1. 解压 ZIP
+          2. 双击 `setup.bat` — 填写 API Key 和 QQ 号（只需一次）
+          3. 双击 `一键启动.bat` — 以后每次启动
 
-          1. 下载并解压 ZIP
-          2. 双击 **`setup.bat`** — 填写 API Key 和 QQ 号（只需一次）
-          3. 双击 **`一键启动.bat`** — 以后每次这样启动
+          ### ZIP 包含
+          - Python 3.12 嵌入包（免安装）
+          - 所有 Python 依赖（离线）
+          - ActivityWatch
 
-          ### 📋 包含内容
-
-          - ✅ Python 3.12 嵌入包（免安装）
-          - ✅ 所有 Python 依赖（离线可用）
-          - ✅ ActivityWatch v0.12.2
-          - ✅ NapCat（最新版，QQ 消息中间件）
-          - ⬇️ Screenpipe（首次启动自动从镜像下载，约 500MB）
-
-          > **NapCat 需要 QQ NT（NTQQ）已安装**，若未安装请先从官网下载 QQ。
+          ### 首次启动自动下载（通过国内镜像，仅一次）
+          - Screenpipe 屏幕感知（约 500MB）
         files: ${{ env.ZIP_PATH }}
         draft: false
         prerelease: false
