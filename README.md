@@ -17,21 +17,25 @@
 
 ## 🚀 快速开始
 
+**Windows（解压 ZIP 后）**：双击项目根目录的 `PhysiBot.cmd`，脚本会尝试准备 Python / uv / 依赖并启动。首次若未填写 API Key，会自动打开浏览器，在监控页 **「设置」** 中填写 LLM、QQ 等并保存；也可使用 **「保存并启动主程序」** 结束向导进程并启动主服务。
+
 ```bash
-# 克隆
-git clone https://github.com/sadkf/PhysiBot.git
+# 克隆（请替换为你的仓库或国内镜像地址）
+git clone <你的仓库 URL>
 cd PhysiBot
 
 # 安装依赖
 uv sync
 
-# 复制配置模板
+# 复制配置模板（若未自动生成）
 cp physi-data/config.yaml.example physi-data/config.yaml
-# 编辑 config.yaml，填入 API Key 等信息
+# 或启动后在 http://127.0.0.1:8765/ →「设置」中填写
 
 # 运行
 uv run python -m physi_core
 ```
+
+运行中可随时打开 **http://127.0.0.1:8765/**（与 `config.yaml` 中 `monitor.port` 一致）→ **「设置」** 修改配置。
 
 ## 🧪 开发
 

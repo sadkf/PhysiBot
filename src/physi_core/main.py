@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import shutil
 import sys
+import webbrowser
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from physi_core.config.persist import needs_initial_setup
 from physi_core.config.settings import Settings, load_settings
 from physi_core.observability import emit_event, initialize_observability, start_trace, end_trace
 
@@ -813,6 +816,13 @@ class PhysiBot:
     async def start(self) -> None:
         """Start all background systems."""
         self._init_components()
+        if self._obs is not None:
+            self._obs.set_config_context(
+                self._data_dir / "config.yaml",
+                self._data_dir / "config.yaml.example",
+                setup_mode=False,
+                project_root=Path.cwd(),
+            )
         if self._obs is not None and self._settings.monitor.enabled:
             self._obs.start_server(host=self._settings.monitor.host, port=self._settings.monitor.port)
             logger.info(
@@ -914,6 +924,36 @@ class PhysiBot:
         logger.info("PhysiBot stopped")
 
 
+async def setup_only_loop() -> None:
+    """无有效 API Key 时仅启动监控页，在「设置」中填写后保存并可一键启动主程序。"""
+    data_dir = Path("physi-data")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    example = data_dir / "config.yaml.example"
+    cfg_path = data_dir / "config.yaml"
+    if not cfg_path.exists() and example.exists():
+        shutil.copy(example, cfg_path)
+    port = 8765
+    host = "127.0.0.1"
+    if cfg_path.exists():
+        try:
+            s = load_settings(cfg_path)
+            port = s.monitor.port
+            host = s.monitor.host
+        except Exception:
+            pass
+    obs = initialize_observability(data_dir)
+    obs.set_config_context(cfg_path, example, setup_mode=True, project_root=Path.cwd())
+    obs.start_server(host, port)
+    try:
+        webbrowser.open(f"http://{host}:{port}/")
+    except Exception:
+        pass
+    logger.info("首次配置向导: http://%s:%d/ （「设置」页）", host, port)
+    print(f"PhysiBot 首次配置：请在浏览器打开 http://{host}:{port}/ 并进入「设置」填写 LLM API Key。")
+    while True:
+        await asyncio.sleep(3600)
+
+
 async def server_loop(settings: Settings) -> None:
     """Server mode: start all services and run until interrupted (no stdin needed).
 
@@ -995,16 +1035,18 @@ def main() -> None:
         logging.getLogger(_noisy).setLevel(logging.WARNING)
 
     config_path = Path("physi-data/config.yaml")
-    if not config_path.exists():
-        print("⚠️  未找到 physi-data/config.yaml")
-        print("   请复制 config.yaml.example 为 config.yaml 并填写配置")
-        sys.exit(1)
+    example_path = Path("physi-data/config.yaml.example")
+    if not config_path.exists() and example_path.exists():
+        shutil.copy(example_path, config_path)
+
+    if needs_initial_setup(config_path):
+        if "--cli" in sys.argv:
+            print("⚠️  请先配置 LLM API Key：运行不带 --cli 将打开浏览器向导，或编辑 physi-data/config.yaml")
+            sys.exit(1)
+        asyncio.run(setup_only_loop())
+        return
 
     settings = load_settings(config_path)
-
-    if not settings.llm.api_key:
-        print("⚠️  请设置 LLM API Key")
-        sys.exit(1)
 
     if "--cli" in sys.argv:
         asyncio.run(cli_loop(settings))

@@ -8,6 +8,7 @@ HTTP monitor at :8765 shows:
 - Traces tab: traces grouped, newest first, collapsible with full JSON detail
 - LLM Log tab: raw full I/O from llm_calls.jsonl with search
 - Runtime Log tab: tail of runtime.log
+- 设置 tab: 编辑 physi-data/config.yaml（API Key / QQ / 感知等），与首次配置向导共用
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from __future__ import annotations
 import contextvars
 import json
 import logging
+import os
 import threading
 import time
 import uuid
@@ -199,15 +201,30 @@ _HTML = r"""<!doctype html>
     /* ── Copy button ── */
     .copy-btn{background:#21262d;border:1px solid #30363d;border-radius:4px;color:#8b949e;padding:2px 8px;cursor:pointer;font-size:11px;margin-left:8px}
     .copy-btn:hover{color:#c9d1d9}
+    .cfg-wrap{max-width:920px}
+    .cfg-section{margin-bottom:16px;border:1px solid #30363d;border-radius:8px;padding:14px 16px;background:#161b22}
+    .cfg-section h3{color:#8b949e;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px}
+    .cfg-row{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:10px}
+    .cfg-row label{min-width:130px;color:#8b949e;font-size:13px;flex-shrink:0}
+    .cfg-row input,.cfg-row select{flex:1;min-width:180px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;padding:6px 10px;font-size:13px}
+    .cfg-row input[type=checkbox]{min-width:auto;flex:0;width:16px;height:16px}
+    .cfg-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;align-items:center}
+    .cfg-msg{padding:10px 14px;border-radius:6px;font-size:13px;margin-bottom:12px;display:none}
+    .cfg-msg.show{display:block}
+    .cfg-msg.ok{background:#0d2117;border:1px solid #1e4a2a;color:#3fb950}
+    .cfg-msg.err{background:#210d0d;border:1px solid #4a1e1e;color:#f85149}
+    .btn-primary{background:#1f6feb;border-color:#1f6feb;color:#fff}
+    .btn-primary:hover{background:#388bfd;border-color:#388bfd}
   </style>
 </head>
 <body>
 <div class="topbar">
-  <h1><span class="dot"></span>PhysiBot Monitor</h1>
+  <h1 id="appTitle"><span class="dot"></span>PhysiBot Monitor</h1>
   <div class="tabs">
     <button class="tab active" onclick="showPanel('traces',this)">Traces</button>
     <button class="tab" onclick="showPanel('llmlog',this)">LLM Log</button>
     <button class="tab" onclick="showPanel('runtimelog',this)">Runtime Log</button>
+    <button class="tab" onclick="showPanel('settings',this)">设置</button>
   </div>
 </div>
 
@@ -254,6 +271,50 @@ _HTML = r"""<!doctype html>
   <div class="log-wrap" id="logWrap"><span style="color:#8b949e">点击刷新加载</span></div>
 </div>
 
+<!-- ══ SETTINGS PANEL ══ -->
+<div class="content panel" id="panel-settings">
+  <div class="cfg-wrap">
+    <div class="tools-wrap">在此填写 LLM、QQ、感知等配置。API Key 仅保存在本机 <code>physi-data/config.yaml</code>，不会上传。</div>
+    <div id="cfgMsg" class="cfg-msg"></div>
+    <div class="cfg-section">
+      <h3>LLM</h3>
+      <div class="cfg-row"><label>provider</label><input id="llm_provider" placeholder="minimax / openai / anthropic"/></div>
+      <div class="cfg-row"><label>model</label><input id="llm_model"/></div>
+      <div class="cfg-row"><label>api_key</label><input id="llm_api_key" type="password" autocomplete="new-password" placeholder="已配置时可留空不修改"/></div>
+      <div class="cfg-row"><label>base_url</label><input id="llm_base_url" placeholder="可选，留空用默认"/></div>
+    </div>
+    <div class="cfg-section">
+      <h3>感知（可选）</h3>
+      <div class="cfg-row"><label>Screenpipe</label><input type="checkbox" id="sp_en"/><span style="color:#8b949e;font-size:13px">启用</span></div>
+      <div class="cfg-row"><label>screenpipe URL</label><input id="sp_url"/></div>
+      <div class="cfg-row"><label>ActivityWatch</label><input type="checkbox" id="aw_en"/><span style="color:#8b949e;font-size:13px">启用</span></div>
+      <div class="cfg-row"><label>activitywatch URL</label><input id="aw_url"/></div>
+      <div class="cfg-row"><label>剪贴板</label><input type="checkbox" id="cb_en"/><span style="color:#8b949e;font-size:13px">启用</span></div>
+    </div>
+    <div class="cfg-section">
+      <h3>QQ（可选）</h3>
+      <div class="cfg-row"><label>ws_url</label><input id="qq_ws" placeholder="ws://127.0.0.1:3001"/></div>
+      <div class="cfg-row"><label>owner_qq</label><input id="qq_owner" placeholder="NapCat 登录 QQ"/></div>
+      <div class="cfg-row"><label>talk_qq</label><input id="qq_talk" placeholder="逗号分隔，允许私聊的 QQ"/></div>
+    </div>
+    <div class="cfg-section">
+      <h3>IoT（可选）</h3>
+      <div class="cfg-row"><label>启用 Home Assistant</label><input type="checkbox" id="iot_en"/><span style="color:#8b949e;font-size:13px">启用</span></div>
+      <div class="cfg-row"><label>url</label><input id="iot_url"/></div>
+      <div class="cfg-row"><label>token</label><input id="iot_token" type="password" autocomplete="new-password"/></div>
+    </div>
+    <div class="cfg-section">
+      <h3>本页监控</h3>
+      <div class="cfg-row"><label>host</label><input id="mon_host"/></div>
+      <div class="cfg-row"><label>port</label><input id="mon_port" type="number" min="1" max="65535"/></div>
+    </div>
+    <div class="cfg-actions">
+      <button class="btn" onclick="saveConfig(false)">保存配置</button>
+      <button class="btn btn-primary" onclick="saveConfig(true)">保存并启动主程序</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ════════════════════════ Global state ════════════════════════
 const expanded = new Set();      // trace IDs
@@ -261,6 +322,8 @@ const evExpanded = new Set();    // "traceId:evIdx" strings
 let currentFilter = '';
 let allTraces = [];
 let allLlmEntries = [];
+let llmHasKey = false;
+let setupMode = false;
 
 // ════════════════════════ Panel switching ════════════════════════
 function showPanel(name, btn) {
@@ -270,6 +333,7 @@ function showPanel(name, btn) {
   btn.classList.add('active');
   if (name === 'runtimelog') loadRuntimeLog();
   if (name === 'llmlog') loadLlmLog();
+  if (name === 'settings') loadConfig();
 }
 
 // ════════════════════════ Helpers ════════════════════════
@@ -623,7 +687,142 @@ async function loadRuntimeLog(){
   }
 }
 
+// ════════════════════════ Settings ════════════════════════
+function showCfgMsg(text, isErr){
+  const el=document.getElementById('cfgMsg');
+  el.textContent=text||'';
+  el.className='cfg-msg show '+(isErr?'err':'ok');
+  if(!text) el.classList.remove('show');
+}
+async function loadConfig(){
+  showCfgMsg('',false);
+  try{
+    const data=await fetch('/api/config').then(r=>r.json());
+    if(data.error && data.error.indexOf('not set')>=0){
+      showCfgMsg('配置路径未初始化（仅开发模式可能出现）',true);
+      return;
+    }
+    llmHasKey=!!data.llm_has_api_key;
+    setupMode=!!data.setup_mode;
+    if(setupMode){
+      document.getElementById('appTitle').innerHTML='<span class="dot"></span>PhysiBot — 首次配置';
+    }
+    const c=data.config||{};
+    const llm=c.llm||{};
+    document.getElementById('llm_provider').value=llm.provider||'';
+    document.getElementById('llm_model').value=llm.model||'';
+    document.getElementById('llm_api_key').value='';
+    document.getElementById('llm_base_url').value=llm.base_url||'';
+    const sp=(c.perception&&c.perception.screenpipe)||{};
+    const aw=(c.perception&&c.perception.activitywatch)||{};
+    const cb=(c.perception&&c.perception.clipboard)||{};
+    document.getElementById('sp_en').checked=!!sp.enabled;
+    document.getElementById('sp_url').value=sp.api_url||'';
+    document.getElementById('aw_en').checked=!!aw.enabled;
+    document.getElementById('aw_url').value=aw.api_url||'';
+    document.getElementById('cb_en').checked=cb.enabled!==false;
+    const qq=c.qq||{};
+    document.getElementById('qq_ws').value=qq.ws_url||'';
+    const ow=qq.owner_qq;
+    document.getElementById('qq_owner').value=Array.isArray(ow)?(ow[0]||''):String(ow||'');
+    const tq=qq.talk_qq||[];
+    document.getElementById('qq_talk').value=Array.isArray(tq)?tq.join(','):String(tq||'');
+    const iot=c.iot||{};
+    document.getElementById('iot_en').checked=!!iot.enabled;
+    document.getElementById('iot_url').value=iot.url||'';
+    document.getElementById('iot_token').value=iot.token||'';
+    const mon=c.monitor||{};
+    document.getElementById('mon_host').value=mon.host||'127.0.0.1';
+    document.getElementById('mon_port').value=mon.port||8765;
+  }catch(e){
+    showCfgMsg('加载配置失败: '+e,true);
+  }
+}
+function buildConfigFromForm(){
+  const talkStr=document.getElementById('qq_talk').value||'';
+  const talkList=talkStr.split(/[,，\s]+/).map(function(s){return s.trim();}).filter(Boolean);
+  const owner=document.getElementById('qq_owner').value.trim();
+  return {
+    llm:{
+      provider:document.getElementById('llm_provider').value.trim(),
+      model:document.getElementById('llm_model').value.trim(),
+      api_key:document.getElementById('llm_api_key').value.trim(),
+      base_url:document.getElementById('llm_base_url').value.trim(),
+    },
+    perception:{
+      screenpipe:{
+        enabled:document.getElementById('sp_en').checked,
+        api_url:document.getElementById('sp_url').value.trim()||'http://localhost:3030',
+      },
+      activitywatch:{
+        enabled:document.getElementById('aw_en').checked,
+        api_url:document.getElementById('aw_url').value.trim()||'http://localhost:5600',
+      },
+      clipboard:{
+        enabled:document.getElementById('cb_en').checked,
+        poll_interval:5,
+      },
+    },
+    qq:{
+      ws_url:document.getElementById('qq_ws').value.trim()||'ws://localhost:3001',
+      owner_qq:owner||'',
+      talk_qq:talkList.length?talkList:(owner ? [owner] : []),
+    },
+    iot:{
+      enabled:document.getElementById('iot_en').checked,
+      url:document.getElementById('iot_url').value.trim()||'http://homeassistant.local:8123',
+      token:document.getElementById('iot_token').value.trim(),
+    },
+    monitor:{
+      host:document.getElementById('mon_host').value.trim()||'127.0.0.1',
+      port:parseInt(document.getElementById('mon_port').value,10)||8765,
+    },
+  };
+}
+async function saveConfig(andLaunch){
+  showCfgMsg('',false);
+  const body={
+    config:buildConfigFromForm(),
+    keep_llm_api_key:llmHasKey && !document.getElementById('llm_api_key').value.trim(),
+  };
+  try{
+    const res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j=await res.json();
+    if(!j.ok){
+      showCfgMsg(j.error||'保存失败',true);
+      return;
+    }
+    llmHasKey=true;
+    showCfgMsg('已保存',false);
+    if(andLaunch){
+      const r=await fetch('/api/launch',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+      const j2=await r.json();
+      if(!j2.ok){
+        showCfgMsg(j2.error||'启动失败',true);
+        return;
+      }
+      showCfgMsg('已启动主程序，本窗口将关闭…',false);
+    }
+  }catch(e){
+    showCfgMsg('请求失败: '+e,true);
+  }
+}
+
 // ════════════════════════ Boot ════════════════════════
+(async function bootWizardTab(){
+  try{
+    const d=await fetch('/api/config').then(r=>r.json());
+    if(d.setup_mode){
+      const tabs=document.querySelectorAll('.tabs .tab');
+      for(let i=0;i<tabs.length;i++){
+        if((tabs[i].textContent||'').trim()==='设置'){
+          showPanel('settings',tabs[i]);
+          break;
+        }
+      }
+    }
+  }catch(e){}
+})();
 refresh();
 setInterval(refresh,4000);
 </script>
@@ -650,6 +849,26 @@ class Observability:
         self._llm_calls_path = logs_dir / "llm_calls.jsonl"
         self._httpd: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
+        # Monitor「设置」页：读写 physi-data/config.yaml
+        self._config_path: Path | None = None
+        self._example_path: Path | None = None
+        self._setup_mode: bool = False
+        self._project_root: Path = Path.cwd()
+
+    def set_config_context(
+        self,
+        config_path: Path,
+        example_path: Path,
+        *,
+        setup_mode: bool = False,
+        project_root: Path | None = None,
+    ) -> None:
+        """供首次向导与正常运行时加载/保存配置。"""
+        self._config_path = config_path
+        self._example_path = example_path
+        self._setup_mode = setup_mode
+        if project_root is not None:
+            self._project_root = project_root
 
     # ── Trace lifecycle ───────────────────────────────────────────────────────
 
@@ -757,6 +976,79 @@ class Observability:
         except Exception as e:
             return f"(read error: {e})"
 
+    # ── Config API (Monitor 设置页) ───────────────────────────────────────────
+
+    def api_get_config(self) -> dict[str, Any]:
+        from physi_core.config.persist import load_raw_config, mask_config_for_ui
+
+        if self._config_path is None or self._example_path is None:
+            return {"error": "config context not set", "config": {}, "llm_has_api_key": False}
+        raw = load_raw_config(self._config_path, self._example_path)
+        cfg, has_key = mask_config_for_ui(raw)
+        return {
+            "config": cfg,
+            "llm_has_api_key": has_key,
+            "setup_mode": self._setup_mode,
+        }
+
+    def api_post_config(self, body: dict[str, Any]) -> tuple[bool, str]:
+        from physi_core.config.persist import (
+            apply_config_patch,
+            load_raw_config,
+            save_yaml,
+            validate_config_dict,
+        )
+
+        if self._config_path is None or self._example_path is None:
+            return False, "config context not set"
+        raw_prev = load_raw_config(self._config_path, self._example_path)
+        prev_key = ""
+        if isinstance(raw_prev.get("llm"), dict):
+            prev_key = (raw_prev["llm"].get("api_key") or "").strip()
+        patch = body.get("config") if isinstance(body.get("config"), dict) else body
+        if not isinstance(patch, dict):
+            return False, "invalid JSON body"
+        keep = bool(body.get("keep_llm_api_key")) and not (
+            (patch.get("llm") or {}).get("api_key") or ""
+        ).strip()
+        merged = apply_config_patch(
+            raw_prev, patch, keep_llm_api_key=keep, previous_api_key=prev_key
+        )
+        save_yaml(self._config_path, merged)
+        return validate_config_dict(self._config_path)
+
+    def api_launch_main(self) -> tuple[bool, str]:
+        """校验配置并启动主进程（用于首次向导）。由 HTTP 层在响应发送后再调度 os._exit。"""
+        import subprocess
+        import sys
+
+        from physi_core.config.persist import validate_config_dict
+
+        if self._config_path is None:
+            return False, "config path not set"
+        ok, err = validate_config_dict(self._config_path)
+        if not ok:
+            return False, err
+        root = self._project_root
+        creation = 0
+        if sys.platform == "win32":
+            creation |= getattr(subprocess, "DETACHED_PROCESS", 0)
+            creation |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        try:
+            subprocess.Popen(
+                [sys.executable, "-m", "physi_core"],
+                cwd=str(root),
+                creationflags=creation,
+                close_fds=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
+            )
+        except Exception as e:
+            return False, str(e)
+        logger.info("Launched main process from setup wizard; parent will exit.")
+        return True, ""
+
     # ── HTTP server ───────────────────────────────────────────────────────────
 
     def start_server(self, host: str = "127.0.0.1", port: int = 8765) -> None:
@@ -765,6 +1057,13 @@ class Observability:
         obs = self
 
         class Handler(BaseHTTPRequestHandler):
+            def do_OPTIONS(self) -> None:  # noqa: N802
+                self.send_response(204)
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type")
+                self.end_headers()
+
             def do_GET(self) -> None:  # noqa: N802
                 parsed = urlparse(self.path)
                 if parsed.path == "/":
@@ -784,9 +1083,43 @@ class Observability:
                     qs = parse_qs(parsed.query)
                     lines = int((qs.get("lines") or ["100"])[0])
                     self._send_json({"content": obs.get_runtime_log(lines=lines)})
+                elif parsed.path == "/api/config":
+                    self._send_json(obs.api_get_config())
                 else:
                     self.send_response(404)
                     self.end_headers()
+
+            def do_POST(self) -> None:  # noqa: N802
+                parsed = urlparse(self.path)
+                if parsed.path == "/api/config":
+                    self._handle_post_config()
+                elif parsed.path == "/api/launch":
+                    self._handle_post_launch()
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def _handle_post_config(self) -> None:
+                try:
+                    length = int(self.headers.get("Content-Length", 0))
+                    raw = self.rfile.read(length) if length else b"{}"
+                    body = json.loads(raw.decode("utf-8")) if raw else {}
+                except json.JSONDecodeError:
+                    self._send_json({"ok": False, "error": "invalid JSON"})
+                    return
+                ok, err = obs.api_post_config(body)
+                self._send_json({"ok": ok, "error": err or None})
+
+            def _handle_post_launch(self) -> None:
+                ok, err = obs.api_launch_main()
+                self._send_json({"ok": ok, "error": err or None})
+                if ok:
+
+                    def _exit_later() -> None:
+                        time.sleep(0.2)
+                        os._exit(0)
+
+                    threading.Thread(target=_exit_later, daemon=True).start()
 
             def log_message(self, *_args: Any) -> None:
                 return
