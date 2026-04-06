@@ -277,10 +277,10 @@ _HTML = r"""<!doctype html>
     <div class="tools-wrap">在此填写 LLM、QQ、感知等配置。API Key 仅保存在本机 <code>physi-data/config.yaml</code>，不会上传。</div>
     <div id="cfgMsg" class="cfg-msg"></div>
     <div class="cfg-section">
-      <h3>LLM</h3>
-      <div class="cfg-row"><label>provider</label><input id="llm_provider" placeholder="minimax / openai / anthropic"/></div>
-      <div class="cfg-row"><label>model</label><input id="llm_model"/></div>
-      <div class="cfg-row"><label>api_key</label><input id="llm_api_key" type="password" autocomplete="new-password" placeholder="已配置时可留空不修改"/></div>
+      <h3>LLM（内定 MiniMax，仅需 API Key）</h3>
+      <div class="cfg-row"><label>provider</label><input id="llm_provider" disabled/></div>
+      <div class="cfg-row"><label>model</label><input id="llm_model" disabled/></div>
+      <div class="cfg-row"><label>api_key</label><input id="llm_api_key" type="password" autocomplete="new-password" placeholder="必填：你的 MiniMax API Key"/></div>
       <div class="cfg-row"><label>base_url</label><input id="llm_base_url" placeholder="可选，留空用默认"/></div>
     </div>
     <div class="cfg-section">
@@ -709,8 +709,8 @@ async function loadConfig(){
     }
     const c=data.config||{};
     const llm=c.llm||{};
-    document.getElementById('llm_provider').value=llm.provider||'';
-    document.getElementById('llm_model').value=llm.model||'';
+    document.getElementById('llm_provider').value='minimax';
+    document.getElementById('llm_model').value='MiniMax-M2.7';
     document.getElementById('llm_api_key').value='';
     document.getElementById('llm_base_url').value=llm.base_url||'';
     const sp=(c.perception&&c.perception.screenpipe)||{};
@@ -744,8 +744,8 @@ function buildConfigFromForm(){
   const owner=document.getElementById('qq_owner').value.trim();
   return {
     llm:{
-      provider:document.getElementById('llm_provider').value.trim(),
-      model:document.getElementById('llm_model').value.trim(),
+      provider:'minimax',
+      model:'MiniMax-M2.7',
       api_key:document.getElementById('llm_api_key').value.trim(),
       base_url:document.getElementById('llm_base_url').value.trim(),
     },

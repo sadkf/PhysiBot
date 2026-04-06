@@ -83,6 +83,9 @@ def apply_config_patch(
     merged = deep_merge(current, patch)
     llm = merged.get("llm")
     if isinstance(llm, dict):
+        # 内定 MiniMax：即便前端不传 provider/model，也补齐默认值
+        llm.setdefault("provider", "minimax")
+        llm.setdefault("model", "MiniMax-M2.7")
         new_key = (llm.get("api_key") or "").strip()
         if keep_llm_api_key and not new_key:
             llm["api_key"] = previous_api_key
@@ -102,10 +105,36 @@ def validate_config_dict(path: Path) -> tuple[bool, str]:
     except Exception as e:
         return False, str(e)
     s = load_settings(path)
+    # ── 必填：LLM（内定 MiniMax，仅要求 API Key）──────────────────────────
     if not (s.llm.api_key or "").strip():
         return False, "请填写 LLM API Key"
     if (s.llm.api_key or "").strip().lower() in {x.lower() for x in _PLACEHOLDER_API_KEYS}:
         return False, "请填写真实的 LLM API Key（不要使用占位符）"
+
+    # ── 必填：感知（Screenpipe / ActivityWatch）──────────────────────────
+    if not getattr(s.perception.screenpipe, "enabled", False):
+        return False, "请启用 Screenpipe（感知是必填能力）"
+    if not (getattr(s.perception.screenpipe, "api_url", "") or "").strip():
+        return False, "请填写 Screenpipe API URL"
+    if not getattr(s.perception.activitywatch, "enabled", False):
+        return False, "请启用 ActivityWatch（感知是必填能力）"
+    if not (getattr(s.perception.activitywatch, "api_url", "") or "").strip():
+        return False, "请填写 ActivityWatch API URL"
+
+    # ── 必填：QQ（NapCat）───────────────────────────────────────────────
+    if not (s.qq.ws_url or "").strip():
+        return False, "请填写 QQ ws_url（NapCat WebSocket 地址）"
+    owner = getattr(s.qq, "owner_qq", None)
+    if owner is None:
+        return False, "请填写 owner_qq（NapCat 登录 QQ）"
+    owner_str = str(owner).strip()
+    if not owner_str or not owner_str.isdigit():
+        return False, "owner_qq 必须是纯数字 QQ 号"
+    talk = getattr(s.qq, "talk_qq", None)
+    talk_list = talk if isinstance(talk, list) else []
+    talk_list = [str(x).strip() for x in talk_list if str(x).strip()]
+    if not talk_list:
+        return False, "请填写 talk_qq（允许私聊的 QQ 列表，至少 1 个）"
     return True, ""
 
 
