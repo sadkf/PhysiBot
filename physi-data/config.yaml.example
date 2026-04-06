@@ -5,13 +5,13 @@ llm:
   api_key: "your-api-key-here"      # API Key
   base_url: ""                       # 留空使用默认
 
-# 感知层（默认可关，先跑通主程序再开）
+# 感知层（主能力：屏幕/活动感知；需本机 Screenpipe、ActivityWatch 已启动。若尚未安装，可先在「设置」或此处改为 enabled: false）
 perception:
   screenpipe:
-    enabled: false
+    enabled: true
     api_url: "http://localhost:3030"
   activitywatch:
-    enabled: false
+    enabled: true
     api_url: "http://localhost:5600"
   clipboard:
     enabled: true
