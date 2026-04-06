@@ -124,10 +124,15 @@ def validate_config_dict(path: Path) -> tuple[bool, str]:
     # ── 必填：QQ（NapCat）───────────────────────────────────────────────
     if not (s.qq.ws_url or "").strip():
         return False, "请填写 QQ ws_url（NapCat WebSocket 地址）"
-    owner = getattr(s.qq, "owner_qq", None)
-    if owner is None:
+    owner_raw = getattr(s.qq, "owner_qq", None)
+    if owner_raw is None:
         return False, "请填写 owner_qq（NapCat 登录 QQ）"
-    owner_str = str(owner).strip()
+    # Settings.QQConfig.owner_qq 的类型是 list[str]（兼容旧格式会归一化）
+    owner_str = ""
+    if isinstance(owner_raw, list):
+        owner_str = (str(owner_raw[0]).strip() if owner_raw else "")
+    else:
+        owner_str = str(owner_raw).strip()
     if not owner_str or not owner_str.isdigit():
         return False, "owner_qq 必须是纯数字 QQ 号"
     talk = getattr(s.qq, "talk_qq", None)
