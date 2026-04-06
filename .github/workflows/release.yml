@@ -107,28 +107,7 @@ jobs:
 
         Write-Host "All dependencies installed"
 
-    # ── ActivityWatch ────────────────────────────────────────
-    - name: Bundle ActivityWatch
-      shell: pwsh
-      run: |
-        $ProgressPreference = "SilentlyContinue"
-        $awDir = "$env:DIST_DIR\vendor\activitywatch"
-        $tmp   = "$env:TEMP\aw.zip"
-        New-Item -ItemType Directory $awDir -Force | Out-Null
-
-        Invoke-WebRequest `
-            -Uri "https://ghfast.top/https://github.com/ActivityWatch/activitywatch/releases/download/v0.12.2/activitywatch-v0.12.2-windows-x86_64.zip" `
-            -OutFile $tmp -UseBasicParsing
-        Expand-Archive $tmp $awDir -Force
-
-        # 展平单层嵌套
-        $subs = Get-ChildItem $awDir -Directory
-        if ($subs.Count -eq 1) {
-            Get-ChildItem $subs[0].FullName -Force | Move-Item -Destination $awDir -Force
-            Remove-Item $subs[0].FullName -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        Remove-Item $tmp -Force
-        Write-Host "ActivityWatch bundled"
+    # ActivityWatch 不打入 ZIP（太大，首次启动由 run.ps1 自动从镜像下载）
 
     # ── 打包 ZIP ─────────────────────────────────────────────
     - name: Create ZIP
@@ -166,9 +145,9 @@ jobs:
           ### ZIP 包含
           - Python 3.12 嵌入包（免安装）
           - 所有 Python 依赖（离线）
-          - ActivityWatch
 
           ### 首次启动自动下载（通过国内镜像，仅一次）
+          - ActivityWatch 活动追踪（约 80MB）
           - Screenpipe 屏幕感知（约 500MB）
         files: ${{ env.ZIP_PATH }}
         draft: false
