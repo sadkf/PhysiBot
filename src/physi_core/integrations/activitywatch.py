@@ -8,6 +8,8 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 
+from physi_core.observability import emit_event
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,6 +60,7 @@ class ActivityWatchClient:
                 data = resp.json()
         except httpx.HTTPError as e:
             logger.error("ActivityWatch API error: %s", e)
+            emit_event("activitywatch.query.error", error=str(e), minutes=minutes)
             return []
 
         results: list[AppUsage] = []
@@ -68,6 +71,7 @@ class ActivityWatchClient:
                 title=event_data.get("title", ""),
                 duration_seconds=event.get("duration", 0),
             ))
+        emit_event("activitywatch.query.ok", minutes=minutes, entries=len(results))
         return results
 
     async def _get_hostname(self) -> str | None:
@@ -90,6 +94,52 @@ class ActivityWatchClient:
         for u in usages:
             lines.append(f"- {u.app}: {u.duration_minutes:.0f} 分钟")
         return "\n".join(lines)
+
+    async def get_continuous_usage_hours(self, max_hours: int = 4) -> float:
+        """Return hours of continuous non-AFK usage up to now.
+
+        Queries the AFK watcher bucket and finds the end of the most recent
+        AFK event. Everything from that moment to now counts as continuous use.
+        """
+        hostname = await self._get_hostname()
+        if not hostname:
+            return 0.0
+
+        end = datetime.now(UTC)
+        start = end - timedelta(hours=max_hours)
+        query = [
+            f'events = query_bucket("aw-watcher-afk_{hostname}");',
+            'RETURN = events;',
+        ]
+        timeperiods = [f"{start.isoformat()}/{end.isoformat()}"]
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{self._base_url}/api/0/query/",
+                    json={"query": query, "timeperiods": timeperiods},
+                )
+                resp.raise_for_status()
+                events = resp.json()[0] if resp.json() else []
+        except httpx.HTTPError as e:
+            logger.error("ActivityWatch AFK query error: %s", e)
+            return 0.0
+
+        # Find the end timestamp of the most recent "afk" event.
+        # Continuous usage = now − that point.
+        last_afk_end = start
+        for event in events:
+            if event.get("data", {}).get("status") == "afk":
+                try:
+                    event_start = datetime.fromisoformat(event["timestamp"])
+                    event_end = event_start + timedelta(seconds=float(event.get("duration", 0)))
+                    if event_end > last_afk_end:
+                        last_afk_end = event_end
+                except (KeyError, ValueError):
+                    continue
+
+        continuous = (end - last_afk_end).total_seconds() / 3600
+        return max(0.0, continuous)
 
     async def health_check(self) -> bool:
         """Check if ActivityWatch is running."""

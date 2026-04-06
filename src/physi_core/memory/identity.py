@@ -1,4 +1,4 @@
-"""L0 Identity Memory — JSONL-based user profile storage."""
+"""L0 Metadata Memory — JSONL-based user profile storage."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class IdentityMemory:
-    """Read/write user identity facts from a JSONL file.
+    """Read/write user metadata facts from a JSONL file.
 
     Each line: {"key": "name", "value": "东东", "updated": "2026-04-05"}
     """
@@ -25,7 +25,7 @@ class IdentityMemory:
     def _load(self) -> None:
         """Load data from JSONL file."""
         if not self._path.exists():
-            logger.info("Identity file not found at %s, starting empty", self._path)
+            logger.info("Metadata file not found at %s, starting empty", self._path)
             return
 
         for line_num, line in enumerate(
@@ -67,14 +67,37 @@ class IdentityMemory:
         """Return all stored keys."""
         return list(self._data.keys())
 
+    # 分类键名映射（用于 to_prompt_text 分组展示）
+    _CATEGORIES: dict[str, list[str]] = {
+        "基本信息": ["name", "nickname", "call_me", "age", "gender", "occupation", "language", "timezone"],
+        "作息偏好": ["wakeup_time", "sleep_time", "pet_peeve"],
+        "账号 & 联系方式": ["qq_number", "wechat", "email", "github", "bilibili", "douyin", "twitter"],
+        "服务器 & 基础设施": ["ssh_host", "ssh_user", "server_location", "server_os", "nas_host"],
+    }
+
     def to_prompt_text(self) -> str:
-        """Format identity data for injection into LLM prompt."""
+        """Format metadata for injection into LLM prompt, grouped by category."""
         if not self._data:
             return ""
-        lines = ["## 用户身份信息"]
-        for entry in self._data.values():
-            lines.append(f"- {entry['key']}: {entry['value']}")
-        return "\n".join(lines)
+        used: set[str] = set()
+        sections: list[str] = []
+
+        for category, keys in self._CATEGORIES.items():
+            items = [(k, self._data[k]["value"]) for k in keys if k in self._data]
+            if items:
+                sections.append(f"**{category}**")
+                for k, v in items:
+                    sections.append(f"- {k}: {v}")
+                used.update(k for k, _ in items)
+
+        # 剩余未分类的 key
+        remaining = [(k, e["value"]) for k, e in self._data.items() if k not in used]
+        if remaining:
+            sections.append("**其他**")
+            for k, v in remaining:
+                sections.append(f"- {k}: {v}")
+
+        return "\n".join(sections)
 
     def _save(self) -> None:
         """Persist to JSONL file."""

@@ -69,12 +69,13 @@ class TestToolController:
         assert "offline" in (result.error or "")
 
     def test_is_dangerous(self) -> None:
+        # Permission confirmation is currently disabled; all tools are treated as safe.
         tc = ToolController()
         tc.register("safe", "desc", {}, mock_search, PermissionLevel.SAFE)
         tc.register("confirm", "desc", {}, mock_ha_control, PermissionLevel.CONFIRM)
         assert tc.is_dangerous("safe") is False
-        assert tc.is_dangerous("confirm") is True
-        assert tc.is_dangerous("unknown") is True  # unknown = dangerous
+        assert tc.is_dangerous("confirm") is False
+        assert tc.is_dangerous("unknown") is False
 
     def test_is_denied(self) -> None:
         tc = ToolController()

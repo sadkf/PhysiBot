@@ -31,7 +31,7 @@ class MidTermMemory:
 
     def write_segment(self, content: str, ts: datetime | None = None) -> Path:
         """Write a 30-min segment file. Returns the path written."""
-        ts = ts or datetime.now(UTC)
+        ts = ts or datetime.now()
         filename = ts.strftime("%Y-%m-%d_%H%M") + ".md"
         path = self._segments_dir / filename
         path.write_text(content, encoding="utf-8")
@@ -62,7 +62,7 @@ class MidTermMemory:
 
     def write_daily(self, content: str, date: str | None = None) -> Path:
         """Write a daily summary. date format: YYYY-MM-DD."""
-        date = date or datetime.now(UTC).strftime("%Y-%m-%d")
+        date = date or datetime.now().strftime("%Y-%m-%d")
         path = self._daily_dir / f"{date}.md"
         path.write_text(content, encoding="utf-8")
         logger.info("Wrote daily summary: %s", date)
@@ -75,7 +75,7 @@ class MidTermMemory:
 
     def get_today_summary(self) -> str:
         """Get today's daily summary, empty if not yet generated."""
-        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        today = datetime.now().strftime("%Y-%m-%d")
         return self.read_daily(today) or ""
 
     def list_dailies(self) -> list[Path]:
@@ -91,7 +91,7 @@ class MidTermMemory:
 
     def write_weekly(self, content: str, week: str | None = None) -> Path:
         """Write a weekly summary. week format: YYYY-WNN."""
-        week = week or datetime.now(UTC).strftime("%G-W%V")
+        week = week or datetime.now().strftime("%G-W%V")
         path = self._weekly_dir / f"{week}.md"
         path.write_text(content, encoding="utf-8")
         logger.info("Wrote weekly summary: %s", week)
@@ -117,6 +117,61 @@ class MidTermMemory:
                 path.unlink()
                 removed += 1
         logger.info("Cleaned up %d segment files", removed)
+        return removed
+
+    def cleanup_old_segments(self, max_days: int = 3) -> int:
+        """Remove segments older than max_days. Returns count removed."""
+        from datetime import timedelta
+
+        cutoff = datetime.now() - timedelta(days=max_days)
+        removed = 0
+        for path in self._segments_dir.glob("*.md"):
+            try:
+                ts = datetime.strptime(path.stem, "%Y-%m-%d_%H%M")
+                if ts < cutoff:
+                    path.unlink()
+                    removed += 1
+            except ValueError:
+                continue
+        if removed:
+            logger.info("Cleaned up %d old segment files (>%d days)", removed, max_days)
+        return removed
+
+    def cleanup_old_dailies(self, max_days: int = 30) -> int:
+        """Remove daily summaries older than max_days. Returns count removed."""
+        from datetime import timedelta
+
+        cutoff = datetime.now() - timedelta(days=max_days)
+        removed = 0
+        for path in self._daily_dir.glob("*.md"):
+            try:
+                ts = datetime.strptime(path.stem, "%Y-%m-%d")
+                if ts < cutoff:
+                    path.unlink()
+                    removed += 1
+            except ValueError:
+                continue
+        if removed:
+            logger.info("Cleaned up %d old daily files (>%d days)", removed, max_days)
+        return removed
+
+    def cleanup_old_weeklies(self, max_weeks: int = 12) -> int:
+        """Remove weekly summaries older than max_weeks. Returns count removed."""
+        from datetime import timedelta
+
+        cutoff = datetime.now() - timedelta(weeks=max_weeks)
+        removed = 0
+        for path in self._weekly_dir.glob("*.md"):
+            try:
+                year_str, week_str = path.stem.split("-W")
+                ts = datetime.fromisocalendar(int(year_str), int(week_str), 1)
+                if ts < cutoff:
+                    path.unlink()
+                    removed += 1
+            except (ValueError, AttributeError):
+                continue
+        if removed:
+            logger.info("Cleaned up %d old weekly files (>%d weeks)", removed, max_weeks)
         return removed
 
     # ── Stats ──────────────────────────────────────

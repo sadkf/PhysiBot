@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _now_local() -> datetime:
+    """本机本地时区的当前时刻（aware），用于落盘与归档文件名，避免误用 UTC。"""
+    return datetime.now().astimezone()
 
 
 class ShortTermMemory:
@@ -50,8 +55,20 @@ class ShortTermMemory:
         source: str = "cli",
     ) -> None:
         """Append a message to the current session and persist."""
+        now = _now_local()
+        
+        # Check 30-min idle auto-session break
+        if self._messages:
+            try:
+                last_ts = datetime.fromisoformat(self._messages[-1]["ts"])
+                if (now - last_ts).total_seconds() > 1800:  # 30 mins
+                    logger.info("Session idle for >30 mins, automatically archiving.")
+                    self.end_session()
+            except Exception:
+                pass
+                
         msg: dict[str, Any] = {
-            "ts": datetime.now(UTC).isoformat(),
+            "ts": now.isoformat(),
             "role": role,
         }
         if content is not None:
@@ -68,6 +85,14 @@ class ShortTermMemory:
             msg["source"] = source
 
         self._messages.append(msg)
+        
+        # Enforce max 100 messages (50 rounds) sliding window limit to avoid infinite accumulation
+        if len(self._messages) > 100:
+            logger.info("Session exceeded 100 messages (50 rounds), dropping oldest.")
+            # Drop 10 oldest messages (but maintain order)
+            cutoff = max(0, len(self._messages) - 90)
+            self._messages = self._messages[cutoff:]
+
         self._persist_current()
 
     def get_messages(self) -> list[dict[str, Any]]:
@@ -94,13 +119,13 @@ class ShortTermMemory:
             return
 
         # Archive
-        ts = datetime.now(UTC).strftime("%Y-%m-%d_%H-%M")
+        ts = _now_local().strftime("%Y-%m-%d_%H-%M")
         archive_path = self._dir / f"session_{ts}.jsonl"
         if self._current_path.exists():
             self._current_path.rename(archive_path)
 
-        # Cleanup old archives (keep most recent by count, let LLM decide importance)
-        self._messages = []
+        # Keep last 3 messages as cross-session context seed
+        self._messages = self._messages[-3:]
         self._persist_current()
 
     def get_archived_sessions(self) -> list[Path]:

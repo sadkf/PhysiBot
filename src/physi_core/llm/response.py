@@ -3,6 +3,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
+
+
+class StreamEventType(Enum):
+    TEXT = "text"
+    THINKING = "thinking"
+    TOOL_START = "tool_start"
+    TOOL_ARG_DELTA = "tool_arg_delta"
+
+
+@dataclass(frozen=True)
+class StreamChunk:
+    """A partial chunk of a streaming response."""
+    event: StreamEventType
+    content: str  # text chunk, thinking chunk, or tool name / args delta
+    id: str | None = None  # tool call ID if applicable
 
 
 @dataclass(frozen=True)

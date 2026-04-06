@@ -23,9 +23,11 @@ class PrivacyFilter:
 
     def __init__(
         self,
+        enabled: bool = True,
         keywords: list[str] | None = None,
         ignore_apps: list[str] | None = None,
     ) -> None:
+        self._enabled = enabled
         self._keywords = [k.lower() for k in (keywords or [])]
         self._ignore_apps = [a.lower() for a in (ignore_apps or [])]
 
@@ -35,6 +37,8 @@ class PrivacyFilter:
 
     def contains_sensitive(self, text: str) -> bool:
         """Check if text contains sensitive keywords or patterns."""
+        if not self._enabled:
+            return False
         lower = text.lower()
 
         # Keyword check
@@ -51,6 +55,8 @@ class PrivacyFilter:
 
     def redact(self, text: str) -> str:
         """Remove sensitive content from text, replacing with [REDACTED]."""
+        if not self._enabled:
+            return text
         result = text
 
         # Redact builtin patterns

@@ -1,0 +1,31 @@
+{{ physi_md }}
+
+【基础环境】
+项目路径: {{ project_path }}
+当前时间: {{ current_datetime }}
+
+【用户信息】
+{{ identity_prompt }}
+{{ portrait_prompt }}
+
+【可用工具】
+{% for tool in tools %}
+- {{ tool.name }}: {{ tool.description }}
+{% endfor %}
+(按需使用，保持克制)
+
+【记忆系统说明】
+- 短期(会话): 当前上下文。
+- 中期(分段): 近期活动摘要见下方。若需要更多细节，用 midterm_read 工具查询。
+- 长期(画像/知识): 用 memory_read 工具按需读取。
+
+{% if today_summary and today_summary != "无" %}
+【今日总结】{{ today_summary }}
+{% endif %}
+{% if recent_segments %}
+【近期活动（摘要）】
+{{ recent_segments }}
+{% endif %}
+{% if system_events %}
+【系统事件】{{ system_events }}
+{% endif %}

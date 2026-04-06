@@ -53,7 +53,7 @@ class TestIdentityMemory:
         mem = IdentityMemory(sample_identity)
         text = mem.to_prompt_text()
         assert "测试用户" in text
-        assert "用户身份信息" in text
+        assert "基本信息" in text
 
     def test_to_prompt_text_empty(self, tmp_path: Path) -> None:
         mem = IdentityMemory(tmp_path / "empty.jsonl")

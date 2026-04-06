@@ -57,10 +57,11 @@ class Scheduler:
         async def _loop() -> None:
             while self._running:
                 now = datetime.now(UTC)
-                target = now.replace(hour=hour, minute=minute, second=0)
+                target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
                 if target <= now:
                     # Already past today's target, wait until tomorrow
-                    target = target.replace(day=target.day + 1)
+                    from datetime import timedelta
+                    target = target + timedelta(days=1)
                 wait = (target - now).total_seconds()
                 logger.info(
                     "Scheduler: %s next run in %.0f seconds", name, wait

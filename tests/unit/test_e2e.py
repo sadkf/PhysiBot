@@ -56,7 +56,7 @@ class TestPhysiBotE2E:
 
     @pytest.mark.asyncio
     async def test_identity_injected_in_prompt(self, tmp_path: Path) -> None:
-        """Verify user identity is injected into system prompt."""
+        """Verify user identity is injected into the dynamically-built system prompt."""
         settings = _make_settings(tmp_path)
         bot = PhysiBot(settings)
 
@@ -75,8 +75,8 @@ class TestPhysiBotE2E:
 
         bot._init_components()
 
-        # Check system prompt contains identity
-        system = bot._agent._system
+        # System prompt is built per-turn, not stored in agent
+        system = bot._build_system_prompt()
         assert "东东" in system
         assert "PhysiBot" in system
 
@@ -101,7 +101,10 @@ class TestPhysiBotE2E:
         assert bot._short_term.message_count == 2
 
         await bot.stop()
-        assert bot._short_term.message_count == 0  # archived
+        # stop() calls end_session() which archives and keeps last 3 msgs as cross-session seed
+        assert bot._short_term.message_count <= 2
+        archives = bot._short_term.get_archived_sessions()
+        assert len(archives) == 1
 
     @pytest.mark.asyncio
     async def test_throttle_limits_extraction(self, tmp_path: Path) -> None:

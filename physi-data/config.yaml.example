@@ -19,16 +19,16 @@ perception:
 
 # IoT
 iot:
-  homeassistant:
-    enabled: false
-    url: "http://homeassistant.local:8123"
-    token: "your-ha-long-lived-token"
+  enabled: false
+  url: "http://homeassistant.local:8123"
+  token: "your-ha-long-lived-token"
 
 # QQ
 qq:
-  napcat:
-    ws_url: "ws://localhost:3001"
-    owner_qq: "123456789"            # 绑定用户的 QQ 号（仅处理此用户的私聊）
+  ws_url: "ws://localhost:3001"
+  owner_qq: "3287716428"             # AI 实际登录的 QQ（NapCat 登录账号）
+  talk_qq:                            # 允许对话的 QQ 列表
+    - "2226359708"
 
 # Agent 行为
 agent:
@@ -38,11 +38,14 @@ agent:
 
 # 隐私
 privacy:
+  redact_sensitive: false            # 本地部署默认不过滤/不脱敏
   ignore_apps:                       # 不监控的应用列表
     - "KeePass"
     - "1Password"
-  sensitive_keywords:                # 这些关键词出现时跳过
-    - "password"
-    - "银行"
-    - "密码"
-    - "信用卡"
+  sensitive_keywords: []             # 开启脱敏时才会使用
+
+# Monitor UI
+monitor:
+  enabled: true
+  host: "127.0.0.1"
+  port: 8765

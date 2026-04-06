@@ -92,6 +92,42 @@ class TestQQMessageFilter:
         }
         await client._dispatch(event)  # Should not raise
 
+    @pytest.mark.asyncio
+    async def test_dispatch_private_with_sender_user_id(self, client: QQClient) -> None:
+        received: list[dict] = []
+
+        async def handler(event: dict) -> None:
+            received.append(event)
+
+        client.on_private_message(handler)
+
+        event = {
+            "post_type": "message",
+            "message_type": "private",
+            "sender": {"user_id": 123456},
+            "message": "hello",
+        }
+        await client._dispatch(event)
+        assert len(received) == 1
+
+    @pytest.mark.asyncio
+    async def test_dispatch_message_sent_with_user_id_fallback(self, client: QQClient) -> None:
+        received: list[dict] = []
+
+        async def handler(event: dict) -> None:
+            received.append(event)
+
+        client.on_private_message(handler)
+
+        event = {
+            "post_type": "message_sent",
+            "message_type": "private",
+            "user_id": 123456,
+            "message": "hello",
+        }
+        await client._dispatch(event)
+        assert len(received) == 1
+
 
 class TestQQTextExtract:
     def test_extract_text_from_segments(self) -> None:
@@ -111,3 +147,17 @@ class TestQQTextExtract:
     def test_extract_empty_message(self) -> None:
         assert QQClient.extract_text({}) == ""
         assert QQClient.extract_text({"message": []}) == ""
+
+
+class TestQQUserIdExtract:
+    def test_extract_user_id_from_message(self) -> None:
+        event = {"post_type": "message", "user_id": 123456}
+        assert QQClient.extract_user_id(event) == "123456"
+
+    def test_extract_user_id_from_sender(self) -> None:
+        event = {"post_type": "message", "sender": {"user_id": 123456}}
+        assert QQClient.extract_user_id(event) == "123456"
+
+    def test_extract_user_id_from_message_sent_target(self) -> None:
+        event = {"post_type": "message_sent", "target_id": 123456}
+        assert QQClient.extract_user_id(event) == "123456"

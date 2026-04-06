@@ -59,9 +59,11 @@ class TestShortTermMemory:
         mem.add_message("user", "hello")
         mem.end_session()
 
-        assert mem.message_count == 0
+        # end_session archives the file and carries over last 3 msgs for cross-session context
         archives = mem.get_archived_sessions()
         assert len(archives) == 1
+        # The 1 message is kept as cross-session seed (not cleared to 0)
+        assert mem.message_count == 1
 
     def test_get_messages_for_llm(self, tmp_path: Path) -> None:
         mem = ShortTermMemory(tmp_path / "st")

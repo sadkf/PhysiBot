@@ -66,7 +66,10 @@ class QQConfig:
     """NapCatQQ config."""
 
     ws_url: str = "ws://localhost:3001"
-    owner_qq: str = ""
+    # owner_qq: the QQ account that NapCat/OneBot logs in as (first item is used)
+    owner_qq: list[str] = field(default_factory=list)
+    # talk_qq: allowed private chat peer(s)
+    talk_qq: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -82,10 +85,18 @@ class AgentConfig:
 class PrivacyConfig:
     """Privacy filter config."""
 
+    redact_sensitive: bool = False
     ignore_apps: list[str] = field(default_factory=list)
-    sensitive_keywords: list[str] = field(
-        default_factory=lambda: ["password", "密码", "银行", "信用卡"]
-    )
+    sensitive_keywords: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class MonitorConfig:
+    """Built-in observability monitor settings."""
+
+    enabled: bool = True
+    host: str = "127.0.0.1"
+    port: int = 8765
 
 
 @dataclass(frozen=True)
@@ -98,6 +109,7 @@ class Settings:
     qq: QQConfig = field(default_factory=QQConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     privacy: PrivacyConfig = field(default_factory=PrivacyConfig)
+    monitor: MonitorConfig = field(default_factory=MonitorConfig)
     data_dir: Path = Path("physi-data")
 
 
@@ -110,6 +122,28 @@ def _build_nested(cls: type, raw: dict[str, Any]) -> Any:
 
     field_types = {f.name: f.type for f in dataclasses.fields(cls)}
     kwargs: dict[str, Any] = {}
+    # Backward compatibility for old QQ config:
+    # - qq.napcat.{ws_url, owner_qq} => qq.{ws_url, owner_qq}
+    # - owner_qq: [a, b]  => owner_qq=[a], talk_qq=[b]
+    # - owner_qq: "a"     => owner_qq=["a"]
+    if cls.__name__ == "QQConfig":
+        normalized = dict(raw)
+        if isinstance(normalized.get("napcat"), dict):
+            napcat = normalized.get("napcat", {})
+            if "ws_url" not in normalized and "ws_url" in napcat:
+                normalized["ws_url"] = napcat["ws_url"]
+            if "owner_qq" not in normalized and "owner_qq" in napcat:
+                normalized["owner_qq"] = napcat["owner_qq"]
+            if "talk_qq" not in normalized and "talk_qq" in napcat:
+                normalized["talk_qq"] = napcat["talk_qq"]
+        if isinstance(normalized.get("owner_qq"), list):
+            owners = [str(v) for v in normalized.get("owner_qq", []) if str(v).strip()]
+            if owners:
+                normalized["owner_qq"] = [owners[0]]
+                if "talk_qq" not in normalized:
+                    normalized["talk_qq"] = owners[1:] or [owners[0]]
+        raw = normalized
+
     for key, val in raw.items():
         if key not in field_types:
             continue
@@ -119,6 +153,9 @@ def _build_nested(cls: type, raw: dict[str, Any]) -> Any:
             ft = eval(ft)  # noqa: S307
         if dataclasses.is_dataclass(ft) and isinstance(val, dict):
             kwargs[key] = _build_nested(ft, val)
+        elif ft == list[str] and isinstance(val, str):
+            # Allow single string where a list is expected (e.g. owner_qq: "123")
+            kwargs[key] = [val]
         else:
             kwargs[key] = val
     return cls(**kwargs)

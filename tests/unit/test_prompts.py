@@ -37,10 +37,10 @@ class TestBuildSystemPrompt:
 
         assert "PhysiBot 指令" in prompt  # L4
         assert "东东" in prompt  # L0
-        assert "记忆索引" in prompt  # MEMORY.md
         assert "程序员" in prompt  # L3
         assert "今天写了代码" in prompt  # L2 daily
         assert "VSCode" in prompt  # L2 segment
+        # memory_index 已从 system prompt 移除，按需由 midterm_read 工具查询
 
     def test_empty_layers_produces_minimal_prompt(self, tmp_path: Path) -> None:
         identity = IdentityMemory(tmp_path / "empty.jsonl")
@@ -53,7 +53,10 @@ class TestBuildSystemPrompt:
             memory_index=idx,
             long_term=lt,
         )
-        assert prompt == ""
+        # Template always emits some structural text (内部系统状态 header etc.)
+        # even with empty layers; just verify no user data leaks in
+        assert "东东" not in prompt
+        assert "portrait" not in prompt
 
 
 class TestLoadPhysiMd:

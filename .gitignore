@@ -27,6 +27,10 @@ physi-data/short_term/
 physi-data/mid_term/
 physi-data/memory/
 physi-data/config.yaml
+physi-data/napcat/
+
+# 本地调试脚本（含本机 API 调用）
+_debug.py
 
 # 保留示例和模板
 !physi-data/PHYSI.md

@@ -58,7 +58,7 @@ privacy:
         settings = load_settings(cfg)
         assert settings.llm.provider == "openai"
         assert settings.llm.model == "gpt-4o"
-        assert settings.qq.owner_qq == "123456"
+        assert settings.qq.owner_qq == ["123456"]  # single string auto-converted to list
         assert settings.agent.segment_interval == 900
         assert "KeePass" in settings.privacy.ignore_apps
         assert "secret" in settings.privacy.sensitive_keywords

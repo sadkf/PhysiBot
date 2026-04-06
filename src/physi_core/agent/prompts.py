@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+from typing import Any
+
 from physi_core.memory.identity import IdentityMemory
 from physi_core.memory.index import MemoryIndex
 from physi_core.memory.long_term import LongTermMemory
+
+from physi_core import prompts
+
+logger = logging.getLogger(__name__)
 
 
 def build_system_prompt(
@@ -12,50 +19,40 @@ def build_system_prompt(
     identity: IdentityMemory,
     memory_index: MemoryIndex,
     long_term: LongTermMemory,
+    tools: list[dict[str, Any]] | None = None,
     today_summary: str = "",
     recent_segments: str = "",
+    system_events: str = "",
+    current_datetime: str = "",
+    project_path: str = "",
 ) -> str:
     """Build the complete system prompt by assembling all memory layers.
 
-    Injection order:
-    1. PHYSI.md (L4 instructions)  ~400 tokens
-    2. Identity (L0 profile)        ~200 tokens
-    3. MEMORY.md (index)            ~500 tokens
-    4. Portrait (L3)                ~500 tokens
-    5. Today summary (L2)           ~300 tokens
-    6. Recent segments (L2)         ~200 tokens
-    Total: ~2100 tokens (well under model limits)
+    Args:
+        tools: List of {"name": ..., "description": ...} dicts derived from
+               ToolController so the template always matches reality.
     """
-    parts: list[str] = []
-
-    # L4: Core instructions
-    if physi_md_content:
-        parts.append(physi_md_content.strip())
-
-    # L0: Identity facts
+    # L0 和 L3 分开注入，不合并 — 结构化事实 vs 推断性画像职责不同
     identity_text = identity.to_prompt_text()
-    if identity_text:
-        parts.append(identity_text)
-
-    # MEMORY.md: Index
-    index_text = memory_index.to_prompt_text()
-    if index_text:
-        parts.append(index_text)
-
-    # L3: User portrait
     portrait_text = long_term.to_prompt_text("portrait")
-    if portrait_text:
-        parts.append(portrait_text)
 
-    # L2: Today's daily summary
-    if today_summary:
-        parts.append(f"## 今日活动\n{today_summary.strip()}")
+    tool_list = tools or []
 
-    # L2: Recent 30-min segments
-    if recent_segments:
-        parts.append(f"## 最近活动\n{recent_segments.strip()}")
-
-    return "\n\n---\n\n".join(parts)
+    rendered = prompts.render(
+        "system_prompt.j2",
+        physi_md=physi_md_content.strip(),
+        identity_prompt=identity_text.strip(),
+        portrait_prompt=portrait_text.strip(),
+        memory_index=memory_index.to_prompt_text().strip(),
+        tools=tool_list,
+        today_summary=today_summary.strip() or "无",
+        recent_segments=recent_segments.strip(),
+        system_events=system_events.strip(),
+        current_datetime=current_datetime,
+        project_path=project_path,
+    )
+    logger.debug("System prompt rendered: %d chars, %d tools", len(rendered), len(tool_list))
+    return rendered
 
 
 def load_physi_md(physi_md_path: str | None = None) -> str:
