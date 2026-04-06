@@ -1018,7 +1018,11 @@ class Observability:
         return validate_config_dict(self._config_path)
 
     def api_launch_main(self) -> tuple[bool, str]:
-        """校验配置并启动主进程（用于首次向导）。由 HTTP 层在响应发送后再调度 os._exit。"""
+        """校验配置并启动主进程（用于首次向导）。
+
+        关键点：以前把 stdout/stderr 丢到 DEVNULL，若子进程启动即崩溃，用户会觉得“没反应”。
+        这里将输出写入 physi-data/logs/launch.log，并在短时间内检测是否立即退出，以便把错误回传到前端。
+        """
         import subprocess
         import sys
 
@@ -1034,18 +1038,40 @@ class Observability:
         if sys.platform == "win32":
             creation |= getattr(subprocess, "DETACHED_PROCESS", 0)
             creation |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        # Write child logs so startup failures are visible.
+        logs_dir = (self._config_path.parent / "logs").resolve()
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        launch_log = logs_dir / "launch.log"
         try:
-            subprocess.Popen(
-                [sys.executable, "-m", "physi_core"],
-                cwd=str(root),
-                creationflags=creation,
-                close_fds=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                stdin=subprocess.DEVNULL,
-            )
+            with launch_log.open("a", encoding="utf-8") as f:
+                f.write(f"\n--- launch at {_local_now()} ---\n")
+                f.flush()
+                p = subprocess.Popen(
+                    [sys.executable, "-m", "physi_core"],
+                    cwd=str(root),
+                    creationflags=creation,
+                    close_fds=True,
+                    stdout=f,
+                    stderr=f,
+                    stdin=subprocess.DEVNULL,
+                )
         except Exception as e:
             return False, str(e)
+        # Detect immediate crash (common for missing config / import errors).
+        try:
+            rc = p.wait(timeout=0.8)
+        except Exception:
+            rc = None
+        if rc is not None and rc != 0:
+            try:
+                tail = launch_log.read_text(encoding="utf-8", errors="replace").splitlines()[-30:]
+                tail_text = "\n".join(tail)
+            except Exception:
+                tail_text = ""
+            msg = f"主程序启动失败（exit={rc}）。请查看 physi-data/logs/launch.log"
+            if tail_text:
+                msg += "\n\n最近日志：\n" + tail_text
+            return False, msg
         logger.info("Launched main process from setup wizard; parent will exit.")
         return True, ""
 
