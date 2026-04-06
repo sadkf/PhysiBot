@@ -25,9 +25,12 @@ function Install-PythonViaWinget {
     }
 }
 
-# 国内 pip / 部分工具镜像（失败时仍回退官方）
+# 国内网络：pip 与 uv 默认走清华 PyPI 镜像（可用环境变量覆盖；见 README「国内用户与网络」）
 if (-not $env:PIP_INDEX_URL) {
     $env:PIP_INDEX_URL = "https://pypi.tuna.tsinghua.edu.cn/simple"
+}
+if (-not $env:UV_DEFAULT_INDEX) {
+    $env:UV_DEFAULT_INDEX = "https://pypi.tuna.tsinghua.edu.cn/simple"
 }
 
 if (-not (Test-Python311Plus)) {

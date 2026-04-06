@@ -37,6 +37,13 @@ uv run python -m physi_core
 
 运行中可随时打开 **http://127.0.0.1:8765/**（与 `config.yaml` 中 `monitor.port` 一致）→ **「设置」** 修改配置。
 
+### 国内用户与网络（真实能下、能装吗？）
+
+- **拿代码**：不需要 GitHub 账号。若 **github.com 打不开或极慢**，请用 **Release / 网盘 / Gitee·GitCode 等镜像** 提供的 **ZIP**（与仓库内容一致即可），解压到**英文路径**更稳。
+- **装依赖**：`PhysiBot.cmd` 里已默认把 **pip** 与 **uv** 的默认索引指到 **清华 PyPI 镜像**（`pypi.tuna.tsinghua.edu.cn`），减轻 `uv sync` 卡住、超时。
+- **仍失败时**：换网络（手机热点）、检查公司代理；可在系统环境或 **`physi-data/local.env`** 里设置 `HTTPS_PROXY` / `HTTP_PROXY`（格式如 `http://127.0.0.1:7890`）。也可自行设置 `UV_DEFAULT_INDEX`、`PIP_INDEX_URL` 指向其他可信镜像。
+- **说明**：ZIP **不含** Python；首次仍需本机安装或脚本通过 **winget** 安装 Python（见脚本提示）。这与「下载项目 ZIP」是两件事。
+
 ## 🧪 开发
 
 ```bash
