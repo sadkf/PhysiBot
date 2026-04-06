@@ -106,7 +106,7 @@ PhysiBot/
 │                                                     │
 │  ┌─────────────────────────────────────────────┐    │
 │  │  L0 · 身份记忆 (Identity Memory)            │    │
-│  │  "我叫温朝东，21 岁"                        │    │
+│  │  "我叫张三，21 岁"                          │    │
 │  │  格式: JSONL  |  注入: 每轮  |  更新: 用户  │    │
 │  └─────────────────────────────────────────────┘    │
 │                                                     │
@@ -150,7 +150,7 @@ PhysiBot/
 **文件位置**：`physi-data/identity/profile.jsonl`
 
 ```jsonl
-{"key": "name", "value": "温朝东", "updated": "2026-04-05"}
+{"key": "name", "value": "张三", "updated": "2026-04-05"}
 {"key": "nickname", "value": "东东", "updated": "2026-04-05"}
 {"key": "age", "value": 21, "updated": "2026-04-05"}
 {"key": "gender", "value": "male", "updated": "2026-04-05"}
@@ -368,7 +368,7 @@ physi-data/memory/
 **用户画像示例** (`memory/portrait.md`)：
 
 ```markdown
-# 用户画像 — 温朝东
+# 用户画像 — 张三
 
 > 最后更新: 2026-04-05
 
@@ -481,7 +481,7 @@ physi-data/memory/
 
 ## 用户身份
 → identity/profile.jsonl
-温朝东，21岁，大三学生/独立开发者，昵称"东哥"。夜猫子，通常 2 点睡 10 点起。
+张三，21岁，大三学生/独立开发者，昵称"小张"。夜猫子，通常 2 点睡 10 点起。
 
 ## 用户画像
 → memory/portrait.md

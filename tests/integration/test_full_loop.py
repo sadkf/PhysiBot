@@ -67,7 +67,7 @@ def _start_mock_http(port: int = 3000) -> None:
 def _make_settings(tmp_path: Path) -> Settings:
     return Settings(
         llm=LLMConfig(provider="minimax", model="test", api_key="fake"),
-        qq=QQConfig(ws_url="ws://127.0.0.1:13001", owner_qq=["2226359708"]),
+        qq=QQConfig(ws_url="ws://127.0.0.1:13001", owner_qq=["1000000002"]),
         data_dir=tmp_path,
     )
 
@@ -83,12 +83,12 @@ def _text_response(text: str) -> LLMResponse:
     return LLMResponse(text=text, usage=TokenUsage(50, 20))
 
 
-def _make_qq_event(text: str, uid: int = 2226359708) -> dict:
+def _make_qq_event(text: str, uid: int = 1000000002) -> dict:
     return {
         "post_type": "message",
         "message_type": "private",
         "user_id": uid,
-        "self_id": 3287716428,
+        "self_id": 1000000001,
         "message": [{"type": "text", "data": {"text": text}}],
         "time": int(time.time()),
         "message_id": 12345,
@@ -113,14 +113,14 @@ class TestFullLoop:
         # Mock LLM: first call sets identity, second finalizes
         mock_llm = AsyncMock()
         mock_llm.chat = AsyncMock(side_effect=[
-            _tool_response("identity_set", {"key": "name", "value": "温朝东"}),
-            _text_response("好的，我记住啦！你是温朝东。"),
+            _tool_response("identity_set", {"key": "name", "value": "张三"}),
+            _text_response("好的，我记住啦！你是张三。"),
         ])
         bot._llm = mock_llm
         bot._agent._llm = mock_llm
 
         # Create QQ client manually (normally done in start())
-        qq = QQClient("ws://127.0.0.1:13001", ["2226359708"])
+        qq = QQClient("ws://127.0.0.1:13001", ["1000000002"])
         qq.on_private_message(bot._on_qq_message)
         bot._qq = qq
 
@@ -147,7 +147,7 @@ class TestFullLoop:
         try:
             # Connect as fake NapCat and send a message
             async with websockets.connect("ws://127.0.0.1:13001") as ws:
-                event = _make_qq_event("你好！我叫温朝东，请记住我的名字。")
+                event = _make_qq_event("你好！我叫张三，请记住我的名字。")
                 await ws.send(json.dumps(event))
 
                 # Wait for agent to process and reply (up to 30s with mock LLM)
@@ -164,7 +164,7 @@ class TestFullLoop:
 
         # Assertions
         assert sent_messages, "No reply sent — agent did not respond via QQ"
-        assert "温朝东" in sent_messages[0], (
+        assert "张三" in sent_messages[0], (
             f"Response should mention the name: {sent_messages[0]}"
         )
 
@@ -172,12 +172,12 @@ class TestFullLoop:
         msgs = bot._short_term.get_messages()
         assert len(msgs) >= 2, f"Expected >= 2 messages in short_term, got {len(msgs)}"
         assert msgs[0]["role"] == "user"
-        assert "温朝东" in msgs[0]["content"]
+        assert "张三" in msgs[0]["content"]
         assert msgs[-1]["role"] == "assistant"
 
         # Identity: name should be stored by identity_set tool
-        assert bot._identity.get("name") == "温朝东", (
-            f"Expected name=温朝东 in identity, got: {bot._identity.get('name')}"
+        assert bot._identity.get("name") == "张三", (
+            f"Expected name=张三 in identity, got: {bot._identity.get('name')}"
         )
 
     @pytest.mark.asyncio

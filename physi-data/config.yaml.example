@@ -5,13 +5,13 @@ llm:
   api_key: "your-api-key-here"      # API Key
   base_url: ""                       # 留空使用默认
 
-# 感知层
+# 感知层（默认关闭，无需本机安装 Screenpipe / ActivityWatch 即可先跑通主程序）
 perception:
   screenpipe:
-    enabled: true
+    enabled: false
     api_url: "http://localhost:3030"
   activitywatch:
-    enabled: true
+    enabled: false
     api_url: "http://localhost:5600"
   clipboard:
     enabled: true
@@ -23,12 +23,12 @@ iot:
   url: "http://homeassistant.local:8123"
   token: "your-ha-long-lived-token"
 
-# QQ
+# QQ（使用 NapCat 时再填写真实号码）
 qq:
   ws_url: "ws://localhost:3001"
-  owner_qq: "3287716428"             # AI 实际登录的 QQ（NapCat 登录账号）
-  talk_qq:                            # 允许对话的 QQ 列表
-    - "2226359708"
+  owner_qq: "1000000001"            # NapCat 登录的 QQ 号
+  talk_qq:
+    - "1000000002"                  # 允许私聊的对方 QQ（可多个）
 
 # Agent 行为
 agent:
