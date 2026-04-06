@@ -1,0 +1,19 @@
+PhysiBot — Windows 如何启动
+============================
+
+请双击以下任一脚本（在压缩包「最外层文件夹」里，与 pyproject.toml 同级）：
+
+  • PhysiBot.cmd
+  • start.bat        （与上面等价，方便只认得 .bat 的用户）
+
+若解压后没有这两个文件
+------------------------
+说明您拿到的 ZIP 不是「当前仓库最新提交」打出来的包。常见原因：
+
+  1. GitHub 上维护者尚未 git push 包含启动脚本的提交；
+  2. 下载的是很旧的 Release 附件或他人转存的旧压缩包。
+
+解决办法：向维护者索取「已 push 的最新 master」源码 ZIP，或自行 git clone 最新代码。
+
+仍可直接运行（已安装 Python/uv 时）：
+  powershell -ExecutionPolicy Bypass -File scripts\bootstrap_and_run.ps1
