@@ -887,8 +887,14 @@ class PhysiBot:
                 primary_owner,  # NapCat logs in with the primary QQ
                 self._settings.qq.ws_url,
             )
-            if not await self._napcat_manager.start():
-                logger.error("Failed to start NapCatQQ manager.")
+            # NapCat 自动安装/下载在国内网络可能失败；不要因此把主程序直接崩掉。
+            try:
+                ok = await self._napcat_manager.start()
+            except Exception as e:
+                ok = False
+                logger.warning("NapCatQQ 启动失败（将继续运行主程序，不影响向导/QQ 反向 WS）: %s", e)
+            if not ok:
+                logger.warning("NapCatQQ manager 未启动（可稍后手动安装/启动 NapCat）。")
 
         logger.info("PhysiBot started")
 
