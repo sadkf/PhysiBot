@@ -133,11 +133,16 @@ def validate_config_dict(path: Path) -> tuple[bool, str]:
         owner_str = (str(owner_raw[0]).strip() if owner_raw else "")
     else:
         owner_str = str(owner_raw).strip()
-    if not owner_str or not owner_str.isdigit():
+    # 容错：去掉空格/逗号等，只保留数字（避免用户粘贴带空格、全角符号导致误报）
+    owner_digits = "".join(ch for ch in owner_str if ch.isdigit())
+    if not owner_digits:
         return False, "owner_qq 必须是纯数字 QQ 号"
     talk = getattr(s.qq, "talk_qq", None)
     talk_list = talk if isinstance(talk, list) else []
     talk_list = [str(x).strip() for x in talk_list if str(x).strip()]
+    # 同上容错：talk_qq 只保留数字
+    talk_list = ["".join(ch for ch in v if ch.isdigit()) for v in talk_list]
+    talk_list = [v for v in talk_list if v]
     if not talk_list:
         return False, "请填写 talk_qq（允许私聊的 QQ 列表，至少 1 个）"
     return True, ""
