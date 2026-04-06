@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import os
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -161,13 +162,41 @@ def _build_nested(cls: type, raw: dict[str, Any]) -> Any:
     return cls(**kwargs)
 
 
+def _llm_api_key_from_env() -> str:
+    """开发机可只配环境变量，避免把 Key 写进 YAML。"""
+    for name in (
+        "PHYSIBOT_LLM_API_KEY",
+        "PHYSIBOT_API_KEY",
+        "MINIMAX_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ):
+        v = (os.environ.get(name) or "").strip()
+        if v:
+            return v
+    return ""
+
+
+def _apply_env_llm_api_key(settings: Settings) -> Settings:
+    if (settings.llm.api_key or "").strip():
+        return settings
+    env_key = _llm_api_key_from_env()
+    if not env_key:
+        return settings
+    return replace(settings, llm=replace(settings.llm, api_key=env_key))
+
+
 def load_settings(config_path: Path | str) -> Settings:
-    """Load settings from a YAML file. Missing fields use defaults."""
+    """Load settings from a YAML file. Missing fields use defaults.
+
+    若 YAML 中 ``llm.api_key`` 为空，会依次尝试环境变量：
+    PHYSIBOT_LLM_API_KEY、PHYSIBOT_API_KEY、MINIMAX_API_KEY、OPENAI_API_KEY、ANTHROPIC_API_KEY。
+    """
     path = Path(config_path)
     if not path.exists():
-        return Settings()
+        return _apply_env_llm_api_key(Settings())
 
     with path.open("r", encoding="utf-8") as f:
         raw = yaml.safe_load(f) or {}
 
-    return _build_nested(Settings, raw)
+    return _apply_env_llm_api_key(_build_nested(Settings, raw))

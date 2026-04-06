@@ -929,9 +929,13 @@ async def setup_only_loop() -> None:
     data_dir = Path("physi-data")
     data_dir.mkdir(parents=True, exist_ok=True)
     example = data_dir / "config.yaml.example"
+    wcd = data_dir / "config.wcd.yaml"
     cfg_path = data_dir / "config.yaml"
-    if not cfg_path.exists() and example.exists():
-        shutil.copy(example, cfg_path)
+    if not cfg_path.exists():
+        if wcd.exists():
+            shutil.copy(wcd, cfg_path)
+        elif example.exists():
+            shutil.copy(example, cfg_path)
     port = 8765
     host = "127.0.0.1"
     if cfg_path.exists():
@@ -1036,8 +1040,12 @@ def main() -> None:
 
     config_path = Path("physi-data/config.yaml")
     example_path = Path("physi-data/config.yaml.example")
-    if not config_path.exists() and example_path.exists():
-        shutil.copy(example_path, config_path)
+    wcd_path = Path("physi-data/config.wcd.yaml")
+    if not config_path.exists():
+        if wcd_path.exists():
+            shutil.copy(wcd_path, config_path)
+        elif example_path.exists():
+            shutil.copy(example_path, config_path)
 
     if needs_initial_setup(config_path):
         if "--cli" in sys.argv:

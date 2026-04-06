@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from physi_core.config.persist import (
     apply_config_patch,
     deep_merge,
@@ -29,7 +31,15 @@ def test_apply_keep_api_key(tmp_path: Path) -> None:
     assert merged["llm"]["api_key"] == "secret"
 
 
-def test_needs_initial_setup(tmp_path: Path) -> None:
+def test_needs_initial_setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    for k in (
+        "PHYSIBOT_LLM_API_KEY",
+        "PHYSIBOT_API_KEY",
+        "MINIMAX_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ):
+        monkeypatch.delenv(k, raising=False)
     p = tmp_path / "c.yaml"
     assert needs_initial_setup(p) is True
     p.write_text("llm:\n  provider: openai\n  api_key: your-api-key-here\n", encoding="utf-8")

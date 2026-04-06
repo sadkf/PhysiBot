@@ -5,6 +5,28 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
+# 开发分支：加载 physi-data/local.env（含 PHYSIBOT_LLM_API_KEY，不提交 git）
+$localEnv = Join-Path $Root "physi-data\local.env"
+if (Test-Path $localEnv) {
+    Write-Host "[bootstrap] 加载 physi-data\local.env" -ForegroundColor DarkGray
+    Get-Content $localEnv -Encoding UTF8 | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -match '^\s*#' -or $line -eq '') { return }
+        $i = $line.IndexOf('=')
+        if ($i -gt 0) {
+            $k = $line.Substring(0, $i).Trim()
+            $v = $line.Substring($i + 1).Trim().Trim('"').Trim("'")
+            [Environment]::SetEnvironmentVariable($k, $v, 'Process')
+        }
+    }
+}
+$cfgYaml = Join-Path $Root "physi-data\config.yaml"
+$cfgWcd = Join-Path $Root "physi-data\config.wcd.yaml"
+if (-not (Test-Path $cfgYaml) -and (Test-Path $cfgWcd)) {
+    Write-Host "[bootstrap] 生成 config.yaml ← config.wcd.yaml" -ForegroundColor Cyan
+    Copy-Item $cfgWcd $cfgYaml
+}
+
 function Test-Python311Plus {
     try {
         $v = python --version 2>&1

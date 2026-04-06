@@ -86,6 +86,17 @@ PhysiBot/
 - [ ] Phase 4: 打包 exe + Dashboard
 - [ ] Phase 5: 开源发布
 
+## feat_wcd 开发分支（本机免重复调配置）
+
+在 `feat_wcd` 上提供了 **`physi-data/config.wcd.yaml`**：已带好常用 QQ / 感知开关等，**不含** API Key。
+
+1. 复制 `physi-data/local.env.example` 为 **`physi-data/local.env`**，填写一行：  
+   `PHYSIBOT_LLM_API_KEY=你的密钥`  
+   （该文件已加入 `.gitignore`，勿提交。）
+2. 若还没有 `physi-data/config.yaml`，首次运行会自动从 `config.wcd.yaml` 生成；若需强制对齐模板：  
+   `powershell -ExecutionPolicy Bypass -File scripts\apply_wcd_config.ps1`
+3. `PhysiBot.cmd` / `bootstrap_and_run.ps1` 会在启动前 **自动加载 `local.env`**，程序也会从环境变量读取 Key（与 YAML 中空 `api_key` 搭配使用）。
+
 ## 📄 License
 
 MIT

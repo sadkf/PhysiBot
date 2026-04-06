@@ -1,0 +1,49 @@
+# feat_wcd 开发用默认配置（可提交仓库）。
+# API Key 请放在 physi-data/local.env（已 gitignore）或系统环境变量 PHYSIBOT_LLM_API_KEY。
+# 首次运行前：复制 local.env.example → local.env 并填写 Key。
+# bootstrap 会在没有 config.yaml 时自动复制本文件为 config.yaml。
+
+llm:
+  provider: "minimax"
+  model: "MiniMax-M2.7"
+  api_key: ""
+  base_url: ""
+
+perception:
+  screenpipe:
+    enabled: true
+    api_url: "http://localhost:3030"
+  activitywatch:
+    enabled: true
+    api_url: "http://localhost:5600"
+  clipboard:
+    enabled: true
+    poll_interval: 5
+
+iot:
+  enabled: false
+  url: "http://homeassistant.local:8123"
+  token: ""
+
+qq:
+  ws_url: "ws://localhost:3001"
+  owner_qq: "3287716428"
+  talk_qq:
+    - "2226359708"
+
+agent:
+  segment_interval: 1800
+  user_trigger_cooldown: 600
+  confirm_dangerous: true
+
+privacy:
+  redact_sensitive: false
+  ignore_apps:
+    - "KeePass"
+    - "1Password"
+  sensitive_keywords: []
+
+monitor:
+  enabled: true
+  host: "127.0.0.1"
+  port: 8765

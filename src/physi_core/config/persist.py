@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from physi_core.config.settings import Settings, load_settings
+from physi_core.config.settings import Settings, _llm_api_key_from_env, load_settings
 
 _PLACEHOLDER_API_KEYS = frozenset(
     {
@@ -22,7 +22,8 @@ _PLACEHOLDER_API_KEYS = frozenset(
 def needs_initial_setup(config_path: Path) -> bool:
     """True when config 缺失或尚未填写有效 API Key。"""
     if not config_path.exists():
-        return True
+        # 仅有环境变量中的 Key、尚无 yaml 时，允许跳过向导（由 main 再生成默认文件）
+        return not bool(_llm_api_key_from_env().strip())
     s = load_settings(config_path)
     k = (s.llm.api_key or "").strip()
     if not k or k.lower() in {x.lower() for x in _PLACEHOLDER_API_KEYS}:
