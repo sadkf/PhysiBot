@@ -1044,10 +1044,8 @@ class Observability:
         launch_log = logs_dir / "launch.log"
         try:
             # Ensure the file exists on disk even if child exits quickly.
-            try:
-                launch_log.touch(exist_ok=True)
-            except Exception:
-                pass
+            # 若此处失败，不要静默吞掉——否则用户仍会觉得“没反应 / 没日志”。
+            launch_log.touch(exist_ok=True)
 
             # Keep the log file handle open for the child's entire lifetime.
             f = launch_log.open("a", encoding="utf-8")
@@ -1064,7 +1062,7 @@ class Observability:
                 stdin=subprocess.DEVNULL,
             )
         except Exception as e:
-            return False, str(e)
+            return False, f"启动日志文件创建失败: {launch_log} ({e})"
         # Detect immediate crash (common for missing config / import errors).
         try:
             rc = p.wait(timeout=0.8)
