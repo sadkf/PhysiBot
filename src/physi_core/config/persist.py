@@ -136,7 +136,7 @@ def validate_config_dict(path: Path) -> tuple[bool, str]:
     # 容错：去掉空格/逗号等，只保留数字（避免用户粘贴带空格、全角符号导致误报）
     owner_digits = "".join(ch for ch in owner_str if ch.isdigit())
     if not owner_digits:
-        return False, "owner_qq 必须是纯数字 QQ 号"
+        return False, f"owner_qq 必须是纯数字 QQ 号（当前: {owner_raw!r} -> {owner_str!r}）"
     talk = getattr(s.qq, "talk_qq", None)
     talk_list = talk if isinstance(talk, list) else []
     talk_list = [str(x).strip() for x in talk_list if str(x).strip()]
