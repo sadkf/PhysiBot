@@ -203,12 +203,20 @@ jobs:
 
         if (-not $releaseId) { Write-Host "Cannot get release ID"; exit 1 }
 
-        # 3. 上传 ZIP 附件
-        $form = @{
-            access_token = $token
-            file         = Get-Item $zipPath
+        # 3. 上传 ZIP 附件（用 curl，PowerShell -Form 对二进制上传不可靠）
+        $uploadUrl = "https://gitee.com/api/v5/repos/$owner/$repo/releases/$releaseId/attach_files"
+        Write-Host "Uploading $zipName to Gitee release $releaseId ..."
+        $curlResult = & curl -s -w "`n%{http_code}" `
+            -F "access_token=$token" `
+            -F "file=@$zipPath" `
+            $uploadUrl
+        $lines     = $curlResult -split "`n"
+        $httpCode  = $lines[-1].Trim()
+        $body      = ($lines[0..($lines.Count-2)] -join "`n")
+        Write-Host "HTTP $httpCode"
+        if ($httpCode -notmatch "^2") {
+            Write-Host "Upload response: $body"
+            exit 1
         }
-        $resp = Invoke-RestMethod `
-            -Uri "https://gitee.com/api/v5/repos/$owner/$repo/releases/$releaseId/attach_files" `
-            -Method Post -Form $form -TimeoutSec 300
-        Write-Host "Gitee Release asset uploaded: $($resp.name)"
+        $name = ($body | ConvertFrom-Json).name
+        Write-Host "Gitee Release asset uploaded: $name"
