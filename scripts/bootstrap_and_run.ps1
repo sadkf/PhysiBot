@@ -1,4 +1,4 @@
-# PhysiBot 一键启动：自动准备 Python / uv / 依赖后调用全流程构建脚本。
+﻿# PhysiBot 一键启动：自动准备 Python / uv / 依赖后调用全流程构建脚本。
 # 用法: 在项目根目录双击 PhysiBot.cmd 或 start.bat
 
 $ErrorActionPreference = "Stop"

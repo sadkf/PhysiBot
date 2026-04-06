@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$SkipCleanup,
     [switch]$SkipBot,
     [switch]$VerboseDownload,

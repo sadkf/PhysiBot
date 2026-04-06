@@ -1,4 +1,4 @@
-# PhysiBot 初始配置向导
+﻿# PhysiBot 初始配置向导
 # 通过 setup.bat 调用，或直接执行：
 #   powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
 
