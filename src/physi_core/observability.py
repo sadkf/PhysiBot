@@ -1043,25 +1043,40 @@ class Observability:
         logs_dir.mkdir(parents=True, exist_ok=True)
         launch_log = logs_dir / "launch.log"
         try:
-            with launch_log.open("a", encoding="utf-8") as f:
-                f.write(f"\n--- launch at {_local_now()} ---\n")
-                f.flush()
-                p = subprocess.Popen(
-                    [sys.executable, "-m", "physi_core"],
-                    cwd=str(root),
-                    creationflags=creation,
-                    close_fds=True,
-                    stdout=f,
-                    stderr=f,
-                    stdin=subprocess.DEVNULL,
-                )
+            # Ensure the file exists on disk even if child exits quickly.
+            # 若此处失败，不要静默吞掉——否则用户仍会觉得“没反应 / 没日志”。
+            launch_log.touch(exist_ok=True)
+
+            # Keep the log file handle open for the child's entire lifetime.
+            f = launch_log.open("a", encoding="utf-8")
+            f.write(f"\n--- launch at {_local_now()} ---\n")
+            f.flush()
+
+            p = subprocess.Popen(
+                [sys.executable, "-m", "physi_core"],
+                cwd=str(root),
+                creationflags=creation,
+                close_fds=True,
+                stdout=f,
+                stderr=f,
+                stdin=subprocess.DEVNULL,
+            )
         except Exception as e:
-            return False, str(e)
+            return False, f"启动日志文件创建失败: {launch_log} ({e})"
         # Detect immediate crash (common for missing config / import errors).
         try:
             rc = p.wait(timeout=0.8)
         except Exception:
             rc = None
+        finally:
+            try:
+                f.flush()
+            except Exception:
+                pass
+            try:
+                f.close()
+            except Exception:
+                pass
         if rc is not None and rc != 0:
             try:
                 tail = launch_log.read_text(encoding="utf-8", errors="replace").splitlines()[-30:]
