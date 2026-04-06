@@ -20,8 +20,8 @@
 **Windows（解压 ZIP 后）**：双击项目根目录的 `PhysiBot.cmd`，脚本会尝试准备 Python / uv / 依赖并启动。首次若未填写 API Key，会自动打开浏览器，在监控页 **「设置」** 中填写 LLM、QQ 等并保存；也可使用 **「保存并启动主程序」** 结束向导进程并启动主服务。
 
 ```bash
-# 克隆（请替换为你的仓库或国内镜像地址）
-git clone <你的仓库 URL>
+# 克隆
+git clone https://github.com/sadkf/PhysiBot.git
 cd PhysiBot
 
 # 安装依赖

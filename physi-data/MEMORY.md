@@ -1,3 +1,33 @@
 # 记忆索引
 
-> 克隆或下载本仓库后，此处应为空。首次运行并与助手对话后，会逐步写入你的画像与主题索引；也可在 `physi-data/memory/` 下自行维护各主题 `.md` 文件（该目录默认不入库，仅存本地）。
+> 以下是你对用户的了解的摘要。详细信息在各主题文件中，按需读取。
+
+## portrait
+-> memory/portrait.md
+# 个人信息 (Portrait)
+
+## 温朝东
+
+
+## 身份信息 - 名字：温朝东
+
+
+## work_projects
+-> memory/work_projects.md
+# 工作项目
+
+## routines
+-> memory/routines.md
+- 近期有看德云色 TES 比赛视频的习惯（英雄联盟） - 日常会同时开着监控页面和娱乐内容
+
+## preferences
+-> memory/preferences.md
+沟通风格：简洁直白，一句话说清，讨厌长篇大论和分条
+
+## segment_activity
+-> memory/segment_activity.md
+定时片段 projects/topics 线索（机器追加）。
+
+## skills_interests
+-> memory/skills_interests.md
+开发主力工具：Cursor, VS Code, Terminal, Edge
