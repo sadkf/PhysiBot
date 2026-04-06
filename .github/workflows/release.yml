@@ -120,8 +120,8 @@ jobs:
         "ZIP_PATH=$zip"            >> $env:GITHUB_ENV
         "ZIP_NAME=$env:DIST_NAME.zip" >> $env:GITHUB_ENV
 
-    # ── 上传 Release ─────────────────────────────────────────
-    - name: Publish Release
+    # ── 发布到 GitHub Release ────────────────────────────────
+    - name: Publish GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.ver.outputs.TAG }}
@@ -129,13 +129,17 @@ jobs:
         body: |
           ## PhysiBot ${{ steps.ver.outputs.VERSION }}
 
-          ### 下载（国内无需梯子）
+          ### 下载（国内直连，无需梯子）
 
+          **Gitee（最快）**
+          ```
+          https://gitee.com/wen-chaodong/PhysiBot/releases/download/${{ steps.ver.outputs.TAG }}/${{ env.ZIP_NAME }}
+          ```
+
+          **GitHub 备用（ghfast 代理）**
           ```
           https://ghfast.top/https://github.com/${{ github.repository }}/releases/download/${{ steps.ver.outputs.TAG }}/${{ env.ZIP_NAME }}
           ```
-
-          备用：将 `ghfast.top` 换成 `ghproxy.net`
 
           ### 使用步骤
           1. 解压 ZIP
@@ -154,3 +158,57 @@ jobs:
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # ── 同步发布到 Gitee Release ──────────────────────────────
+    - name: Publish Gitee Release
+      shell: pwsh
+      env:
+        GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+      run: |
+        $ProgressPreference = "SilentlyContinue"
+        $token   = $env:GITEE_TOKEN
+        $owner   = "wen-chaodong"
+        $repo    = "PhysiBot"
+        $tag     = "${{ steps.ver.outputs.TAG }}"
+        $version = "${{ steps.ver.outputs.VERSION }}"
+        $zipPath = $env:ZIP_PATH
+        $zipName = $env:ZIP_NAME
+        $headers = @{ "Content-Type" = "application/json; charset=utf-8" }
+
+        # 1. 同步代码（Gitee 仓库已在 push tag 时更新，这里只需创建 Release）
+        # 2. 创建 Gitee Release
+        $body = @{
+            access_token      = $token
+            tag_name          = $tag
+            name              = "PhysiBot $version"
+            body              = "同步自 GitHub Release。下载地址见 https://gitee.com/$owner/$repo/releases/tag/$tag"
+            prerelease        = $false
+            target_commitish  = "master"
+        } | ConvertTo-Json -Compress
+
+        try {
+            $rel = Invoke-RestMethod `
+                -Uri "https://gitee.com/api/v5/repos/$owner/$repo/releases" `
+                -Method Post -Body $body -Headers $headers -TimeoutSec 20
+            Write-Host "Release created: $($rel.id)"
+            $releaseId = $rel.id
+        } catch {
+            # Release 已存在则查出 ID
+            Write-Host "Release may exist, fetching: $($_.Exception.Message)"
+            $rels = Invoke-RestMethod `
+                -Uri "https://gitee.com/api/v5/repos/$owner/$repo/releases?access_token=$token" `
+                -TimeoutSec 10
+            $releaseId = ($rels | Where-Object { $_.tag_name -eq $tag } | Select-Object -First 1).id
+        }
+
+        if (-not $releaseId) { Write-Host "Cannot get release ID"; exit 1 }
+
+        # 3. 上传 ZIP 附件
+        $form = @{
+            access_token = $token
+            file         = Get-Item $zipPath
+        }
+        $resp = Invoke-RestMethod `
+            -Uri "https://gitee.com/api/v5/repos/$owner/$repo/releases/$releaseId/attach_files" `
+            -Method Post -Form $form -TimeoutSec 300
+        Write-Host "Gitee Release asset uploaded: $($resp.name)"
